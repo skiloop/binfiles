@@ -105,7 +105,7 @@ func (br *BinReader) resetOffset(offset int64) {
 }
 
 // List documents in bin file
-func (br *BinReader) List(offset int64, keyOnly bool) {
+func (br *BinReader) List(offset int64, limit int64, keyOnly bool) {
 	var err error
 	if err = br.checkAndOpen(); err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "%v\n", err)
@@ -116,9 +116,9 @@ func (br *BinReader) List(offset int64, keyOnly bool) {
 		_, _ = fmt.Fprintf(os.Stderr, "%v\n", err)
 		return
 	}
-	var count int
+	var count int64
 	var doc *DocKey
-	for {
+	for limit == 0 || count < limit {
 		doc, err = br.ReadKey()
 		if err == io.EOF || doc == nil {
 			break

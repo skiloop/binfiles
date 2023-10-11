@@ -12,6 +12,7 @@ type ListCmd struct {
 	Input   string `arg:"" help:"input file name"`
 	Offset  int64  `arg:"" optional:"" help:"start document position" default:"0"`
 	KeyOnly bool   `short:"k" help:"list key only" default:"false"`
+	Limit   int64  `short:"l" help:"limit of list number, 0 means unlimited" default:"0"`
 }
 
 type ReadCmd struct {
@@ -41,7 +42,7 @@ func listDocs() {
 
 	br := binfile.NewBinReader(client.List.Input, ct)
 	if br != nil {
-		br.List(client.List.Offset, client.List.KeyOnly)
+		br.List(client.List.Offset, client.List.Limit, client.List.KeyOnly)
 		return
 	}
 	_, _ = fmt.Fprintf(os.Stderr, "file not found: %s\n", client.List.Input)
