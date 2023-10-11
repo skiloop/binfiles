@@ -1,22 +1,24 @@
 package binfile
 
 import (
-	"io"
-	"encoding/binary"
 	"bytes"
-	"errors"
-	"io/ioutil"
-	"compress/gzip"
 	"compress/bzip2"
+	"compress/gzip"
+	"encoding/binary"
+	"errors"
+	"io"
+	"io/ioutil"
 )
 
 const (
-	GZIP   = iota
+	GZIP = iota
 	ZIP
 	BZIP2
 	BROTLI
 	LZ4
 )
+
+var EmptyDocKey = "empty-doc."
 
 var CompressTypes = map[string]int{
 	"gzip":   GZIP,
@@ -39,9 +41,14 @@ type Doc struct {
 	CompressContent []byte
 	CompressType    int
 }
+type DocKey struct {
+	KeySize     int32
+	ContentSize int32
+	Key         string
+}
 
 func (doc *Doc) read(r io.Reader) error {
-	keySize, err := doc.read4BitsInt(r)
+	keySize, err := ReadKeySize(r)
 	if err != nil {
 		return err
 	}
@@ -51,11 +58,11 @@ func (doc *Doc) read(r io.Reader) error {
 	if err != nil {
 		return err
 	}
-	if n != keySize {
+	if int32(n) != keySize {
 		return ErrReadKey
 	}
 	doc.Key = string(keyBuf)
-	valueSize, err := doc.read4BitsInt(r)
+	valueSize, err := ReadKeySize(r)
 	if err != nil {
 		return err
 	}
@@ -69,16 +76,35 @@ func (doc *Doc) read(r io.Reader) error {
 	return nil
 }
 
-func (doc *Doc) read4BitsInt(r io.Reader) (int, error) {
-	intBuf := make([]byte, 4)
-	n, err := r.Read(intBuf)
-	if n != 4 || err == io.EOF {
-		return 0, nil
-	} else if err != nil {
+func (doc *DocKey) readKey(r io.Reader) error {
+	keySize, err := ReadKeySize(r)
+	if err != nil {
+		return err
+	}
+	keyBuf := make([]byte, keySize)
+
+	n, err := r.Read(keyBuf)
+	if err != nil {
+		return err
+	}
+	if int32(n) != keySize {
+		return ErrReadKey
+	}
+	doc.Key = string(keyBuf)
+	valueSize, err := ReadKeySize(r)
+	if err != nil {
+		return err
+	}
+
+	doc.ContentSize = valueSize
+	return nil
+}
+func ReadKeySize(r io.Reader) (int32, error) {
+	var keySize int32
+	err := binary.Read(r, binary.LittleEndian, &keySize)
+	if err != nil {
 		return 0, err
 	}
-	var keySize int
-	_ = binary.Read(bytes.NewBuffer(intBuf), binary.BigEndian, &keySize)
 	return keySize, nil
 }
 
@@ -97,7 +123,7 @@ func (bz *bzip2ReaderCloser) Read(p []byte) (n int, err error) {
 func (doc *Doc) getDecompressReader() (reader io.ReadCloser, err error) {
 	switch doc.CompressType {
 	case GZIP:
-		return gzip.NewReader(bytes.NewBuffer(doc.CompressContent))
+		return gzip.NewReader(bytes.NewReader(doc.CompressContent))
 	case BZIP2:
 		rc := bzip2ReaderCloser{bzip2.NewReader(bytes.NewBuffer(doc.CompressContent))}
 		return &rc, nil
@@ -127,6 +153,10 @@ func ReadDoc(r io.Reader, compressType int, decompress bool) (*Doc, error) {
 		return nil, err
 	}
 	if decompress {
+		if doc.Key == EmptyDocKey {
+			doc.Content = EmptyDocKey
+			return &doc, nil
+		}
 		err = doc.Decompress()
 		if err != nil {
 			return nil, err

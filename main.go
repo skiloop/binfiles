@@ -3,55 +3,60 @@ package main
 import (
 	"flag"
 	"fmt"
-	"io"
-	"os"
+	"github.com/alecthomas/kong"
 	"github.com/skiloop/gbinutil/binfile"
+	"os"
 )
 
-var (
-	command      = flag.String("c", "c", "command: count[c], readat[r,ra]")
-	input        = flag.String("i", "", "input filename")
-	compressType = flag.String("t", "gzip", "value compression type")
-	output       = flag.String("o", "", "output filename, empty for stdin")
-	position     = flag.Int64("p", 0, "position of input file")
-)
-
-func countBin() {
-	var writer io.Writer
-	var err error
-	if *output != "" {
-		writer, err = os.Open(*output)
-		if err != nil {
-			os.Stderr.WriteString("output file open error")
-			return
-		}
-	}
-	ct, ok := binfile.CompressTypes[*compressType]
-	if !ok {
-		fmt.Fprintf(os.Stderr, "unknown compression type %s\n", *compressType)
-		return
-	}
-
-	br := binfile.NewBinReader(*input, ct)
-	if br != nil {
-		br.Count(*position, writer)
-		return
-	}
-	fmt.Fprintf(os.Stderr, "file not found: %s", *input)
+type ListCmd struct {
+	Input  string `arg:"" help:"input file name"`
+	Offset int64  `arg:"" optional:"" help:"start document position" default:"0"`
 }
 
-func readBinAt() {
-	ct, ok := binfile.CompressTypes[*compressType]
+type ReadCmd struct {
+	Input  string `arg:"" help:"input file name"`
+	Offset int64  `arg:"" optional:"" help:"start position" default:"0"`
+}
+type CountCmd struct {
+	Input  string `arg:"" help:"input file name"`
+	Offset int64  `arg:"" optional:"" help:"start position" default:"0"`
+}
+
+var client struct {
+	CompressType string   `help:"compression type, options are gzip, bz2 and zip, default is gzip" enum:"gzip,bz2,zip" default:"gzip"`
+	Verbose      bool     `short:"v" help:"verbose" default:"false"`
+	List         ListCmd  `cmd:"" aliases:"l,ls" help:"List documents from position."`
+	Read         ReadCmd  `cmd:"" aliases:"r,ra" help:"Read document file in bin file at position"`
+	Count        CountCmd `cmd:"" aliases:"c" help:"count document file in bin file from position"`
+}
+
+func listDocs() {
+	ct, ok := binfile.CompressTypes[client.CompressType]
 	if !ok {
-		fmt.Fprintf(os.Stderr, "unknown compression type %s\n", *compressType)
+		fmt.Fprintf(os.Stderr, "unknown compression type %s\n", client.CompressType)
 		return
 	}
-	br := binfile.NewBinReader(*input, ct)
+
+	br := binfile.NewBinReader(client.List.Input, ct)
+	if br != nil {
+		br.List(client.List.Offset, nil)
+		return
+	}
+	fmt.Fprintf(os.Stderr, "file not found: %s\n", client.List.Input)
+}
+
+func readDoc() {
+	ct, ok := binfile.CompressTypes[client.CompressType]
+	if !ok {
+		fmt.Fprintf(os.Stderr, "unknown compression type %s\n", client.CompressType)
+		return
+	}
+	br := binfile.NewBinReader(client.Read.Input, ct)
 	if br == nil {
-		fmt.Fprintf(os.Stderr, "file not found: %s", *input)
+		fmt.Fprintf(os.Stderr, "file not found: %s\n", client.Read.Input)
 		return
 	}
-	doc, err := br.ReadAt(*position, true)
+	doc, err := br.ReadAt(client.Read.Offset, true)
 	if err != nil {
 		fmt.Println(err.Error())
 	} else {
@@ -60,26 +65,40 @@ func readBinAt() {
 	}
 }
 
-func main() {
-	flag.Parse()
-
-	cmd := flag.Arg(0)
-	if cmd == "" {
-		cmd = *command
+func countDocs() {
+	ct, ok := binfile.CompressTypes[client.CompressType]
+	if !ok {
+		fmt.Fprintf(os.Stderr, "unknown compression type %s\n", client.CompressType)
+		return
 	}
-	switch cmd {
-	case "count":
-	case "c":
-		countBin()
+	br := binfile.NewBinReader(client.Count.Input, ct)
+	if br == nil {
+		fmt.Fprintf(os.Stderr, "file not found: %s\n", client.Count.Input)
+		return
+	}
+	count, err := br.Count(client.Count.Offset)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "file read error: %v\n", err)
+	} else {
+		fmt.Printf("%d", count)
+	}
+}
+
+func main() {
+	ctx := kong.Parse(&client)
+	binfile.Verbose = client.Verbose
+	switch ctx.Command() {
+	case "list <input>", "list <input> <offset>":
+		listDocs()
 		break
-	case "readat":
-	case "ra":
-	case "r":
-		readBinAt()
+	case "read <input>", "read <input> <offset>":
+		readDoc()
+		break
+	case "count <input>", "count <input> <offset>":
+		countDocs()
 		break
 	default:
-		fmt.Fprintf(os.Stderr, "unknown command: %s\n", cmd)
+		fmt.Fprintf(os.Stderr, "unknown command: %s\n", ctx.Command())
 		flag.Usage()
 	}
-
 }
