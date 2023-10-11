@@ -9,8 +9,9 @@ import (
 )
 
 type ListCmd struct {
-	Input  string `arg:"" help:"input file name"`
-	Offset int64  `arg:"" optional:"" help:"start document position" default:"0"`
+	Input   string `arg:"" help:"input file name"`
+	Offset  int64  `arg:"" optional:"" help:"start document position" default:"0"`
+	KeyOnly bool   `short:"k" help:"list key only" default:"false"`
 }
 
 type ReadCmd struct {
@@ -33,27 +34,27 @@ var client struct {
 func listDocs() {
 	ct, ok := binfile.CompressTypes[client.CompressType]
 	if !ok {
-		fmt.Fprintf(os.Stderr, "unknown compression type %s\n", client.CompressType)
+		_, _ = fmt.Fprintf(os.Stderr, "unknown compression type %s\n", client.CompressType)
 		return
 	}
 
 	br := binfile.NewBinReader(client.List.Input, ct)
 	if br != nil {
-		br.List(client.List.Offset, nil)
+		br.List(client.List.Offset, client.List.KeyOnly)
 		return
 	}
-	fmt.Fprintf(os.Stderr, "file not found: %s\n", client.List.Input)
+	_, _ = fmt.Fprintf(os.Stderr, "file not found: %s\n", client.List.Input)
 }
 
 func readDoc() {
 	ct, ok := binfile.CompressTypes[client.CompressType]
 	if !ok {
-		fmt.Fprintf(os.Stderr, "unknown compression type %s\n", client.CompressType)
+		_, _ = fmt.Fprintf(os.Stderr, "unknown compression type %s\n", client.CompressType)
 		return
 	}
 	br := binfile.NewBinReader(client.Read.Input, ct)
 	if br == nil {
-		fmt.Fprintf(os.Stderr, "file not found: %s\n", client.Read.Input)
+		_, _ = fmt.Fprintf(os.Stderr, "file not found: %s\n", client.Read.Input)
 		return
 	}
 	doc, err := br.ReadAt(client.Read.Offset, true)
@@ -68,19 +69,19 @@ func readDoc() {
 func countDocs() {
 	ct, ok := binfile.CompressTypes[client.CompressType]
 	if !ok {
-		fmt.Fprintf(os.Stderr, "unknown compression type %s\n", client.CompressType)
+		_, _ = fmt.Fprintf(os.Stderr, "unknown compression type %s\n", client.CompressType)
 		return
 	}
 	br := binfile.NewBinReader(client.Count.Input, ct)
 	if br == nil {
-		fmt.Fprintf(os.Stderr, "file not found: %s\n", client.Count.Input)
+		_, _ = fmt.Fprintf(os.Stderr, "file not found: %s\n", client.Count.Input)
 		return
 	}
 	count, err := br.Count(client.Count.Offset)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "file read error: %v\n", err)
+		_, _ = fmt.Fprintf(os.Stderr, "file read error: %v\n", err)
 	} else {
-		fmt.Printf("%d", count)
+		fmt.Printf("%d\n", count)
 	}
 }
 
@@ -98,7 +99,7 @@ func main() {
 		countDocs()
 		break
 	default:
-		fmt.Fprintf(os.Stderr, "unknown command: %s\n", ctx.Command())
+		_, _ = fmt.Fprintf(os.Stderr, "unknown command: %s\n", ctx.Command())
 		flag.Usage()
 	}
 }

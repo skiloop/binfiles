@@ -52,14 +52,10 @@ func (doc *Doc) read(r io.Reader) error {
 	if err != nil {
 		return err
 	}
-	keyBuf := make([]byte, keySize)
-
-	n, err := r.Read(keyBuf)
+	var keyBuf []byte
+	keyBuf, err = readBytes(r, int(keySize))
 	if err != nil {
 		return err
-	}
-	if int32(n) != keySize {
-		return ErrReadKey
 	}
 	doc.Key = string(keyBuf)
 	valueSize, err := ReadKeySize(r)
@@ -68,7 +64,7 @@ func (doc *Doc) read(r io.Reader) error {
 	}
 
 	valueBuf := make([]byte, valueSize)
-	n, err = r.Read(valueBuf)
+	_, err = r.Read(valueBuf)
 	if err != nil {
 		return err
 	}
@@ -76,29 +72,18 @@ func (doc *Doc) read(r io.Reader) error {
 	return nil
 }
 
-func (doc *DocKey) readKey(r io.Reader) error {
-	keySize, err := ReadKeySize(r)
-	if err != nil {
-		return err
-	}
-	keyBuf := make([]byte, keySize)
-
+func readBytes(r io.Reader, size int) ([]byte, error) {
+	keyBuf := make([]byte, size)
 	n, err := r.Read(keyBuf)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	if int32(n) != keySize {
-		return ErrReadKey
+	if n != size {
+		return nil, ErrReadKey
 	}
-	doc.Key = string(keyBuf)
-	valueSize, err := ReadKeySize(r)
-	if err != nil {
-		return err
-	}
-
-	doc.ContentSize = valueSize
-	return nil
+	return keyBuf, nil
 }
+
 func ReadKeySize(r io.Reader) (int32, error) {
 	var keySize int32
 	err := binary.Read(r, binary.LittleEndian, &keySize)

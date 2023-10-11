@@ -76,36 +76,71 @@ func (br *BinReader) Count(offset int64) (count uint64, err error) {
 	return count, nil
 }
 
-// List doc in bin file
-func (br *BinReader) List(offset int64, writer io.Writer) error {
-	if err := br.checkAndOpen(); err != nil {
-		return err
+func (br *BinReader) ReadKey() (doc *DocKey, err error) {
+	var keySize int32
+
+	keySize, err = ReadKeySize(br.file)
+	if err != nil {
+		return nil, err
+	}
+	doc = new(DocKey)
+	doc.KeySize = keySize
+	var keyBuf []byte
+	keyBuf, err = readBytes(br.file, int(keySize))
+	if err != nil {
+		return nil, err
+	}
+	doc.Key = string(keyBuf)
+	valueSize, err := ReadKeySize(br.file)
+	if err != nil {
+		return nil, err
+	}
+	doc.ContentSize = valueSize
+	_, _ = br.file.Seek(int64(valueSize), 1)
+	return doc, nil
+}
+
+func (br *BinReader) resetOffset(offset int64) {
+	_, _ = br.file.Seek(offset, 0)
+}
+
+// List documents in bin file
+func (br *BinReader) List(offset int64, keyOnly bool) {
+	var err error
+	if err = br.checkAndOpen(); err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "%v\n", err)
+		return
 	}
 	docPos, err := br.file.Seek(offset, 0)
 	if err != nil {
-		return err
-	}
-	if writer == nil {
-		writer = os.Stdin
+		_, _ = fmt.Fprintf(os.Stderr, "%v\n", err)
+		return
 	}
 	var count int
+	var doc *DocKey
 	for {
-		doc, err := ReadDoc(br.file, br.compressType, false)
-		if err == io.EOF {
+		doc, err = br.ReadKey()
+		if err == io.EOF || doc == nil {
 			break
 		}
-
 		curPos, _ := br.file.Seek(0, 1)
 		count++
 		if err != nil {
-			writer.Write([]byte(fmt.Sprintf("[!%d]\t%20d\t%s\n", count, docPos, err.Error())))
-			return err
+			_, _ = fmt.Fprintf(os.Stderr, "[!%d]\t%20d\t%v\n", count, docPos, err)
+			return
 		}
-		writer.Write([]byte(fmt.Sprintf("[%d]\t%20d\t%s\n", count, docPos, doc.Key)))
+		var msg string
+		if keyOnly {
+			msg = doc.Key
+		} else {
+			msg = fmt.Sprintf("[%d]\t%20d\t%s\n", count, docPos, doc.Key)
+		}
+		fmt.Println(msg)
 		docPos = curPos
 	}
-	writer.Write([]byte(fmt.Sprintf("total %d\n", count)))
-	return nil
+	if !keyOnly {
+		fmt.Printf("total %d\n", count)
+	}
 }
 
 func (br *BinReader) seekNext() (err error) {
@@ -115,34 +150,37 @@ func (br *BinReader) seekNext() (err error) {
 	if err != nil {
 		return err
 	}
+	defer func() {
+		if err != nil {
+			br.resetOffset(offset)
+		}
+	}()
 	// read key size
 	size, err = ReadKeySize(br.file)
 	if err != nil {
-		_, _ = br.file.Seek(offset, 0)
+
 		return err
 	}
 	// skip to value size
 	_, err = br.file.Seek(int64(size), 1)
 	if err != nil {
-		_, _ = br.file.Seek(offset, 0)
 		if err == io.EOF {
-			return InvalidDocumentFound
+			err = InvalidDocumentFound
 		}
 		return err
 	}
 	// read value size
 	size, err = ReadKeySize(br.file)
 	if err != nil {
-		_, _ = br.file.Seek(offset, 0)
 		if err == io.EOF {
-			return InvalidDocumentFound
+			err = InvalidDocumentFound
 		}
 		return err
 	}
 	// skip value bytes
 	_, err = br.file.Seek(int64(size), 1)
 	if err == io.EOF {
-		return nil
+		err = nil
 	}
 	return err
 }
