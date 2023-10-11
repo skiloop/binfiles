@@ -62,7 +62,7 @@ func (br *BinReader) Count(offset int64) (count uint64, err error) {
 		}
 		count++
 		if Verbose && count == nextVerbose {
-			fmt.Printf("got %d documents to %d from position %d\n", count, curPos, offset)
+			fmt.Printf("got %10d documents from %20d to position %20d\n", count, offset, curPos)
 			nextVerbose = nextVerbose * 10
 		}
 		curPos, err = br.file.Seek(0, 1)
