@@ -61,9 +61,9 @@ func (br *BinReader) Count(offset int64) (count uint64, err error) {
 			return count, err
 		}
 		count++
-		if Verbose && nextVerbose == nextVerbose {
-			fmt.Printf("got %d documents at %d from position %d\n", count, curPos, offset)
-			nextVerbose = nextVerbose + 1
+		if Verbose && count == nextVerbose {
+			fmt.Printf("got %d documents to %d from position %d\n", count, curPos, offset)
+			nextVerbose = nextVerbose * 10
 		}
 		curPos, err = br.file.Seek(0, 1)
 		if err == io.EOF {
@@ -133,7 +133,7 @@ func (br *BinReader) List(offset int64, keyOnly bool) {
 		if keyOnly {
 			msg = doc.Key
 		} else {
-			msg = fmt.Sprintf("[%d]\t%20d\t%s\n", count, docPos, doc.Key)
+			msg = fmt.Sprintf("[%d]\t%20d\t%s", count, docPos, doc.Key)
 		}
 		fmt.Println(msg)
 		docPos = curPos

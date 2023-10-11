@@ -4,7 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/alecthomas/kong"
-	"github.com/skiloop/gbinutil/binfile"
+	"github.com/skiloop/binfiles/binfile"
 	"os"
 )
 
@@ -18,6 +18,7 @@ type ReadCmd struct {
 	Input  string `arg:"" help:"input file name"`
 	Offset int64  `arg:"" optional:"" help:"start position" default:"0"`
 }
+
 type CountCmd struct {
 	Input  string `arg:"" help:"input file name"`
 	Offset int64  `arg:"" optional:"" help:"start position" default:"0"`

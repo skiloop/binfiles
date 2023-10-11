@@ -34,8 +34,8 @@ func main() {
 
 	bw := bytes.Buffer{}
 	wt := gzip.NewWriter(&bw)
-	wt.Write(make([]byte, 64))
-	wt.Flush()
-	wt.Close()
+	_, _ = wt.Write(make([]byte, 64))
+	_ = wt.Flush()
+	_ = wt.Close()
 	fmt.Println(base64.StdEncoding.EncodeToString(bw.Bytes()))
 }

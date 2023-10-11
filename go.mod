@@ -1,4 +1,4 @@
-module github.com/skiloop/gbinutil
+module github.com/skiloop/binfiles
 
 go 1.19
 
