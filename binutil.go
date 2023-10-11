@@ -42,6 +42,7 @@ func listDocs() {
 
 	br := binfile.NewBinReader(client.List.Input, ct)
 	if br != nil {
+		defer br.Close()
 		br.List(client.List.Offset, client.List.Limit, client.List.KeyOnly)
 		return
 	}
@@ -59,6 +60,7 @@ func readDoc() {
 		_, _ = fmt.Fprintf(os.Stderr, "file not found: %s\n", client.Read.Input)
 		return
 	}
+	defer br.Close()
 	doc, err := br.ReadAt(client.Read.Offset, true)
 	if err != nil {
 		fmt.Println(err.Error())
@@ -79,6 +81,7 @@ func countDocs() {
 		_, _ = fmt.Fprintf(os.Stderr, "file not found: %s\n", client.Count.Input)
 		return
 	}
+	defer br.Close()
 	count, err := br.Count(client.Count.Offset)
 	if err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "file read error: %v\n", err)
