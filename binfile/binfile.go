@@ -22,6 +22,12 @@ func NewBinReader(filename string, compressType int) *BinReader {
 	return &BinReader{filename: filename, compressType: compressType}
 }
 
+type ReadOption struct {
+	Offset int64 `start offset`
+	Limit  int32 `number of document to read`
+	Step   int32 `document read interval`
+}
+
 // ReadAt read doc at specified position
 func (br *BinReader) ReadAt(offset int64, decompress bool) (doc *Doc, err error) {
 	if err = br.checkAndOpen(); err != nil {
@@ -36,17 +42,58 @@ func (br *BinReader) ReadAt(offset int64, decompress bool) (doc *Doc, err error)
 	return ReadDoc(br.file, br.compressType, decompress)
 }
 
-// Count how many documents in file start from offset
-func (br *BinReader) Count(offset int64) (count uint64, err error) {
-	count = 0
-	if err = br.checkAndOpen(); err != nil {
-		return count, err
+// ReadDocs doc at specified position
+func (br *BinReader) ReadDocs(opt *ReadOption) {
+	var err error
+	if _, err = br.openAndSeek(opt.Offset); err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "open error: %v\n", err)
+		return
 	}
-	_, err = br.file.Seek(offset, 0)
+	var doc *Doc
+	count := opt.Limit
+	for {
+		doc, err = ReadDoc(br.file, br.compressType, true)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			_, _ = fmt.Fprintf(os.Stderr, "read doc error: %v\n", err)
+			return
+		}
+		if Verbose {
+			fmt.Printf("%-20s\t%s\n", doc.Key, doc.Content)
+		} else {
+			fmt.Println(doc.Content)
+		}
+		if opt.Limit > 0 {
+			count -= 1
+			if count <= 0 {
+				break
+			}
+		}
+		br.skipDocs(opt.Step)
+	}
+}
+
+func (br *BinReader) skipDocs(count int32) {
+	var err error
+	for count > 0 {
+		err = br.seekNext()
+		if err != nil {
+			break
+		}
+		count -= 1
+	}
+}
+
+// Count how many documents in file start from offset
+func (br *BinReader) Count(offset int64, verboseStep uint32) (count uint32, err error) {
+	var curPos int64
+	count = 0
+	curPos, err = br.openAndSeek(offset)
 	if err != nil {
 		return count, err
 	}
-	var curPos = offset
 	var nextVerbose = count + 1
 	if Verbose {
 		fmt.Printf("count how many documents from position %d\n", offset)
@@ -63,7 +110,11 @@ func (br *BinReader) Count(offset int64) (count uint64, err error) {
 		count++
 		if Verbose && count == nextVerbose {
 			fmt.Printf("got %10d documents from %20d to position %20d\n", count, offset, curPos)
-			nextVerbose = nextVerbose * 10
+			if verboseStep == 0 {
+				nextVerbose = nextVerbose * 10
+			} else {
+				nextVerbose = nextVerbose + verboseStep
+			}
 		}
 		curPos, err = br.file.Seek(0, 1)
 		if err == io.EOF {
@@ -104,21 +155,26 @@ func (br *BinReader) resetOffset(offset int64) {
 	_, _ = br.file.Seek(offset, 0)
 }
 
-// List documents in bin file
-func (br *BinReader) List(offset int64, limit int64, keyOnly bool) {
+func (br *BinReader) openAndSeek(offset int64) (int64, error) {
 	var err error
 	if err = br.checkAndOpen(); err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "%v\n", err)
-		return
+		return -1, err
 	}
-	docPos, err := br.file.Seek(offset, 0)
+	return br.file.Seek(offset, 0)
+}
+
+// List documents in bin file
+func (br *BinReader) List(opt *ReadOption, keyOnly bool) {
+	docPos, err := br.openAndSeek(opt.Offset)
 	if err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "%v\n", err)
 		return
 	}
-	var count int64
+	var count int32
 	var doc *DocKey
-	for limit == 0 || count < limit {
+	count = 0
+	for opt.Limit == 0 || count < opt.Limit {
 		doc, err = br.ReadKey()
 		if err == io.EOF || doc == nil {
 			break
@@ -137,6 +193,7 @@ func (br *BinReader) List(offset int64, limit int64, keyOnly bool) {
 		}
 		fmt.Println(msg)
 		docPos = curPos
+		br.skipDocs(opt.Step)
 	}
 	if !keyOnly {
 		fmt.Printf("total %d\n", count)

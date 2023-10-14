@@ -12,12 +12,13 @@ type ListCmd struct {
 	Input   string `arg:"" help:"input file name"`
 	Offset  int64  `arg:"" optional:"" help:"start document position" default:"0"`
 	KeyOnly bool   `short:"k" help:"list key only" default:"false"`
-	Limit   int64  `short:"l" help:"limit of list number, 0 means unlimited" default:"0"`
+	Limit   int32  `short:"l" help:"limit of list number, 0 means unlimited" default:"0"`
 }
 
 type ReadCmd struct {
 	Input  string `arg:"" help:"input file name"`
 	Offset int64  `arg:"" optional:"" help:"start position" default:"0"`
+	Limit  int32  `short:"l" help:"number of documents to read, 0 means read all" default:"1"`
 }
 
 type CountCmd struct {
@@ -28,8 +29,9 @@ type CountCmd struct {
 var client struct {
 	CompressType string   `help:"compression type, options are gzip, bz2 and zip, default is gzip" enum:"gzip,bz2,zip" default:"gzip"`
 	Verbose      bool     `short:"v" help:"verbose" default:"false"`
+	Step         int32    `short:"s" help:"how many docs to skip before next doc is processed, for count command means verbose step" default:"0"`
 	List         ListCmd  `cmd:"" aliases:"l,ls" help:"List documents from position."`
-	Read         ReadCmd  `cmd:"" aliases:"r,ra" help:"Read document file in bin file at position"`
+	Read         ReadCmd  `cmd:"" aliases:"r,ra" help:"Read documents from position"`
 	Count        CountCmd `cmd:"" aliases:"c" help:"count document file in bin file from position"`
 }
 
@@ -41,15 +43,20 @@ func listDocs() {
 	}
 
 	br := binfile.NewBinReader(client.List.Input, ct)
-	if br != nil {
+	if nil != br {
 		defer br.Close()
-		br.List(client.List.Offset, client.List.Limit, client.List.KeyOnly)
+		opt := binfile.ReadOption{
+			Offset: client.List.Offset,
+			Limit:  client.List.Limit,
+			Step:   client.Step,
+		}
+		br.List(&opt, client.List.KeyOnly)
 		return
 	}
 	_, _ = fmt.Fprintf(os.Stderr, "file not found: %s\n", client.List.Input)
 }
 
-func readDoc() {
+func readDocs() {
 	ct, ok := binfile.CompressTypes[client.CompressType]
 	if !ok {
 		_, _ = fmt.Fprintf(os.Stderr, "unknown compression type %s\n", client.CompressType)
@@ -61,13 +68,12 @@ func readDoc() {
 		return
 	}
 	defer br.Close()
-	doc, err := br.ReadAt(client.Read.Offset, true)
-	if err != nil {
-		fmt.Println(err.Error())
-	} else {
-		fmt.Println(doc.Content)
-		fmt.Println(doc.Key)
+	opt := binfile.ReadOption{
+		Offset: client.Read.Offset,
+		Limit:  client.Read.Limit,
+		Step:   client.Step,
 	}
+	br.ReadDocs(&opt)
 }
 
 func countDocs() {
@@ -82,7 +88,13 @@ func countDocs() {
 		return
 	}
 	defer br.Close()
-	count, err := br.Count(client.Count.Offset)
+	var step uint32
+	if client.Step < 0 {
+		step = 0
+	} else {
+		step = uint32(client.Step)
+	}
+	count, err := br.Count(client.Count.Offset, step)
 	if err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "file read error: %v\n", err)
 	} else {
@@ -98,7 +110,7 @@ func main() {
 		listDocs()
 		break
 	case "read <input>", "read <input> <offset>":
-		readDoc()
+		readDocs()
 		break
 	case "count <input>", "count <input> <offset>":
 		countDocs()
