@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"regexp"
 )
 
 type BinReader struct {
@@ -26,6 +27,11 @@ type ReadOption struct {
 	Offset int64 `start offset`
 	Limit  int32 `number of document to read`
 	Step   int32 `document read interval`
+}
+
+type SearchOption struct {
+	Key    string `key to search`
+	Offset int64  `start offset to search`
 }
 
 // ReadAt read doc at specified position
@@ -198,6 +204,33 @@ func (br *BinReader) List(opt *ReadOption, keyOnly bool) {
 	if !keyOnly {
 		fmt.Printf("total %d\n", count)
 	}
+}
+
+// Search document in bin file
+func (br *BinReader) Search(key string, offset int64) int64 {
+	_, err := br.openAndSeek(offset)
+	if err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "%v\n", err)
+		return -1
+	}
+	reg, err := regexp.Compile(key)
+	if err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "invalid key pattern %s, %v\n", key, err)
+		return -1
+	}
+	var docPos int64 = -1
+	var doc *DocKey
+	for {
+		docPos, _ = br.file.Seek(0, 1)
+		doc, err = br.ReadKey()
+		if err == io.EOF || doc == nil {
+			break
+		}
+		if reg.MatchString(doc.Key) {
+			return docPos
+		}
+	}
+	return -1
 }
 
 func (br *BinReader) seekNext() (err error) {

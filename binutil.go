@@ -26,13 +26,20 @@ type CountCmd struct {
 	Offset int64  `arg:"" optional:"" help:"start position" default:"0"`
 }
 
+type SearchCmd struct {
+	Input  string `arg:"" help:"input file name"`
+	Key    string `arg:"" help:"key to search, regex supported"`
+	Offset int64  `arg:"" optional:"" help:"position to search from" default:"0"`
+}
+
 var client struct {
-	CompressType string   `help:"compression type, options are gzip, bz2 and zip, default is gzip" enum:"gzip,bz2,zip" default:"gzip"`
-	Verbose      bool     `short:"v" help:"verbose" default:"false"`
-	Step         int32    `short:"s" help:"how many docs to skip before next doc is processed, for count command means verbose step" default:"0"`
-	List         ListCmd  `cmd:"" aliases:"l,ls" help:"List documents from position."`
-	Read         ReadCmd  `cmd:"" aliases:"r,ra" help:"Read documents from position"`
-	Count        CountCmd `cmd:"" aliases:"c" help:"count document file in bin file from position"`
+	CompressType string    `help:"compression type, options are gzip, bz2 and zip, default is gzip" enum:"gzip,bz2,zip" default:"gzip"`
+	Verbose      bool      `short:"v" help:"verbose" default:"false"`
+	Step         int32     `short:"s" help:"how many docs to skip before next doc is processed, for count command means verbose step" default:"0"`
+	List         ListCmd   `cmd:"" aliases:"l,ls" help:"List documents from position."`
+	Read         ReadCmd   `cmd:"" aliases:"r,ra" help:"Read documents from position"`
+	Count        CountCmd  `cmd:"" aliases:"c" help:"count document file in bin file from position"`
+	Search       SearchCmd `cmd:"" aliases:"s" help:"search document by key"`
 }
 
 func listDocs() {
@@ -101,6 +108,30 @@ func countDocs() {
 		fmt.Printf("%d\n", count)
 	}
 }
+func searchDocs() {
+	ct, ok := binfile.CompressTypes[client.CompressType]
+	if !ok {
+		_, _ = fmt.Fprintf(os.Stderr, "unknown compression type %s\n", client.CompressType)
+		return
+	}
+	br := binfile.NewBinReader(client.Search.Input, ct)
+	if br == nil {
+		_, _ = fmt.Fprintf(os.Stderr, "file not found: %s\n", client.Search.Input)
+		return
+	}
+	defer br.Close()
+
+	pos := br.Search(client.Search.Key, client.Search.Offset)
+	if pos < 0 {
+		_, _ = fmt.Fprintf(os.Stderr, "document with key %s not found", client.Search.Key)
+		return
+	}
+	doc, err := br.ReadAt(pos, true)
+	if err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "document found at %d but read error: %v\n", pos, err)
+	}
+	fmt.Printf("%10d\t%s\n", pos, doc.Content)
+}
 
 func main() {
 	ctx := kong.Parse(&client)
@@ -114,6 +145,9 @@ func main() {
 		break
 	case "count <input>", "count <input> <offset>":
 		countDocs()
+		break
+	case "search <input> <key>", "search <input> <key> <offset>":
+		searchDocs()
 		break
 	default:
 		_, _ = fmt.Fprintf(os.Stderr, "unknown command: %s\n", ctx.Command())
