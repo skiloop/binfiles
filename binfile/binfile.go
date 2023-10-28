@@ -35,7 +35,7 @@ type SearchOption struct {
 }
 
 // ReadAt read doc at specified position
-func (br BinReader) ReadAt(offset int64, decompress bool) (doc *Doc, err error) {
+func (br *BinReader) ReadAt(offset int64, decompress bool) (doc *Doc, err error) {
 	if err = br.checkAndOpen(); err != nil {
 		return nil, err
 	}
@@ -49,7 +49,7 @@ func (br BinReader) ReadAt(offset int64, decompress bool) (doc *Doc, err error) 
 }
 
 // ReadDocs doc at specified position
-func (br BinReader) ReadDocs(opt *ReadOption) {
+func (br *BinReader) ReadDocs(opt *ReadOption) {
 	var err error
 	if _, err = br.openAndSeek(opt.Offset); err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "open error: %v\n", err)
@@ -81,7 +81,7 @@ func (br BinReader) ReadDocs(opt *ReadOption) {
 	}
 }
 
-func (br BinReader) skipDocs(count int32) {
+func (br *BinReader) skipDocs(count int32) {
 	var err error
 	for count > 0 {
 		err = br.seekNext()
@@ -93,7 +93,7 @@ func (br BinReader) skipDocs(count int32) {
 }
 
 // Count how many documents in file start from offset
-func (br BinReader) Count(offset int64, verboseStep uint32) (count uint32, err error) {
+func (br *BinReader) Count(offset int64, verboseStep uint32) (count uint32, err error) {
 	var curPos int64
 	count = 0
 	curPos, err = br.openAndSeek(offset)
@@ -133,7 +133,7 @@ func (br BinReader) Count(offset int64, verboseStep uint32) (count uint32, err e
 	return count, nil
 }
 
-func (br BinReader) ReadKey() (doc *DocKey, err error) {
+func (br *BinReader) ReadKey() (doc *DocKey, err error) {
 	var keySize int32
 
 	keySize, err = ReadKeySize(br.file)
@@ -157,11 +157,11 @@ func (br BinReader) ReadKey() (doc *DocKey, err error) {
 	return doc, nil
 }
 
-func (br BinReader) resetOffset(offset int64) {
+func (br *BinReader) resetOffset(offset int64) {
 	_, _ = br.file.Seek(offset, 0)
 }
 
-func (br BinReader) openAndSeek(offset int64) (int64, error) {
+func (br *BinReader) openAndSeek(offset int64) (int64, error) {
 	var err error
 	if err = br.checkAndOpen(); err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "%v\n", err)
@@ -171,7 +171,7 @@ func (br BinReader) openAndSeek(offset int64) (int64, error) {
 }
 
 // List documents in bin file
-func (br BinReader) List(opt *ReadOption, keyOnly bool) {
+func (br *BinReader) List(opt *ReadOption, keyOnly bool) {
 	docPos, err := br.openAndSeek(opt.Offset)
 	if err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "%v\n", err)
@@ -207,7 +207,7 @@ func (br BinReader) List(opt *ReadOption, keyOnly bool) {
 }
 
 // Search document in bin file
-func (br BinReader) Search(key string, offset int64) int64 {
+func (br *BinReader) Search(key string, offset int64) int64 {
 	_, err := br.openAndSeek(offset)
 	if err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "%v\n", err)
@@ -234,7 +234,7 @@ func (br BinReader) Search(key string, offset int64) int64 {
 }
 
 // seekNext seek next document
-func (br BinReader) seekNext() (err error) {
+func (br *BinReader) seekNext() (err error) {
 	var offset int64
 	var size int32
 	offset, err = br.file.Seek(0, 1)
@@ -276,19 +276,19 @@ func (br BinReader) seekNext() (err error) {
 	return err
 }
 
-func (br BinReader) open() (err error) {
+func (br *BinReader) open() (err error) {
 	br.file, err = os.Open(br.filename)
 	return err
 }
 
-func (br BinReader) Close() {
+func (br *BinReader) Close() {
 	if br.file != nil {
 		_ = br.file.Close()
 		br.file = nil
 	}
 }
 
-func (br BinReader) checkAndOpen() error {
+func (br *BinReader) checkAndOpen() error {
 	if br.file == nil {
 		err := br.open()
 		if nil != err {
@@ -299,7 +299,7 @@ func (br BinReader) checkAndOpen() error {
 }
 
 // Next document position
-func (br BinReader) Next(offset int64) (pos int64, doc *Doc) {
+func (br *BinReader) Next(offset int64) (pos int64, doc *Doc) {
 	var err error
 	_, err = br.openAndSeek(offset)
 	if err != nil {
