@@ -6,11 +6,17 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"fmt"
+	"github.com/alecthomas/kong"
 	"os"
 )
 
+var cli struct {
+	binFile string `arg:"" help:"source file"`
+}
+
 func main() {
-	w, err := os.OpenFile("c.bin", os.O_CREATE|os.O_WRONLY, 0644)
+	_ = kong.Parse(&cli)
+	w, err := os.OpenFile(cli.binFile, os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		fmt.Println(err.Error())
 		return
@@ -22,9 +28,9 @@ func main() {
 		fmt.Println(err.Error())
 		return
 	}
-	w.Close()
+	_ = w.Close()
 
-	r, err := os.OpenFile("c.bin", os.O_RDONLY, 0)
+	r, err := os.OpenFile(cli.binFile, os.O_RDONLY, 0)
 	if err != nil {
 		fmt.Println(err.Error())
 		return

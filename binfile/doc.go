@@ -6,8 +6,8 @@ import (
 	"compress/gzip"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
-	"io/ioutil"
 )
 
 const (
@@ -18,6 +18,7 @@ const (
 	LZ4
 )
 
+var KeySizeLimit int32 = 100
 var EmptyDocKey = "empty-doc."
 
 var CompressTypes = map[string]int{
@@ -41,6 +42,7 @@ type Doc struct {
 	CompressContent []byte
 	CompressType    int
 }
+
 type DocKey struct {
 	KeySize     int32
 	ContentSize int32
@@ -52,7 +54,13 @@ func (doc *Doc) read(r io.Reader) error {
 	if err != nil {
 		return err
 	}
+	if keySize <= 0 || keySize > KeySizeLimit {
+		return InvalidDocumentFound
+	}
 	var keyBuf []byte
+	if Debug {
+		fmt.Printf("read %d bytes for key\n", keySize)
+	}
 	keyBuf, err = readBytes(r, int(keySize))
 	if err != nil {
 		return err
@@ -61,6 +69,9 @@ func (doc *Doc) read(r io.Reader) error {
 	valueSize, err := ReadKeySize(r)
 	if err != nil {
 		return err
+	}
+	if valueSize < 0 {
+		return nil
 	}
 
 	valueBuf := make([]byte, valueSize)
@@ -93,15 +104,15 @@ func ReadKeySize(r io.Reader) (int32, error) {
 	return keySize, nil
 }
 
-type bzip2ReaderCloser struct {
+type bzip2Reader struct {
 	reader io.Reader
 }
 
-func (bz *bzip2ReaderCloser) Close() error {
+func (bz *bzip2Reader) Close() error {
 	return nil
 }
 
-func (bz *bzip2ReaderCloser) Read(p []byte) (n int, err error) {
+func (bz *bzip2Reader) Read(p []byte) (n int, err error) {
 	return bz.reader.Read(p)
 }
 
@@ -110,7 +121,7 @@ func (doc *Doc) getDecompressReader() (reader io.ReadCloser, err error) {
 	case GZIP:
 		return gzip.NewReader(bytes.NewReader(doc.CompressContent))
 	case BZIP2:
-		rc := bzip2ReaderCloser{bzip2.NewReader(bytes.NewBuffer(doc.CompressContent))}
+		rc := bzip2Reader{bzip2.NewReader(bytes.NewBuffer(doc.CompressContent))}
 		return &rc, nil
 	default:
 		return nil, ErrNotSupport
@@ -122,8 +133,10 @@ func (doc *Doc) Decompress() error {
 	if err != nil {
 		return err
 	}
-	defer reader.Close()
-	data, err := ioutil.ReadAll(reader)
+	defer func(reader io.ReadCloser) {
+		_ = reader.Close()
+	}(reader)
+	data, err := io.ReadAll(reader)
 	if err != nil {
 		return err
 	}
