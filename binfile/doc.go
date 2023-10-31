@@ -12,6 +12,7 @@ import (
 
 const (
 	GZIP = iota
+	NONE // do not compress
 	ZIP
 	BZIP2
 	BROTLI
@@ -23,6 +24,7 @@ var EmptyDocKey = "empty-doc."
 
 var CompressTypes = map[string]int{
 	"gzip":   GZIP,
+	"none":   NONE,
 	"zip":    ZIP,
 	"bzip2":  BZIP2,
 	"bz2":    BZIP2,
@@ -150,7 +152,7 @@ func ReadDoc(r io.Reader, compressType int, decompress bool) (*Doc, error) {
 	if err != nil {
 		return nil, err
 	}
-	if decompress {
+	if decompress && compressType != NONE {
 		if doc.Key == EmptyDocKey {
 			doc.Content = EmptyDocKey
 			return &doc, nil

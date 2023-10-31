@@ -36,7 +36,7 @@ type SeekCmd struct {
 }
 
 var client struct {
-	CompressType string    `short:"z" help:"compression type, options are gzip, bz2 and zip, default is gzip" enum:"gzip,bz2,zip" default:"gzip"`
+	CompressType string    `short:"z" help:"compression type, options are gzip, bz2 and zip, default is gzip, none if do not want to compress" enum:"gzip,bz2,zip,none" default:"gzip"`
 	Verbose      bool      `short:"v" help:"verbose" default:"false"`
 	Debug        bool      `short:"d" help:"debug" default:"false"`
 	KeySizeLimit int32     `help:"max size of document key in bytes" default:"100"`
