@@ -131,18 +131,23 @@ func (doc *Doc) getDecompressReader() (reader io.ReadCloser, err error) {
 }
 
 func (doc *Doc) Decompress() error {
-	reader, err := doc.getDecompressReader()
-	if err != nil {
-		return err
+	if doc.CompressType != NONE {
+		reader, err := doc.getDecompressReader()
+		if err != nil {
+			return err
+		}
+		defer func(reader io.ReadCloser) {
+			_ = reader.Close()
+		}(reader)
+		data, err := io.ReadAll(reader)
+		if err != nil {
+			return err
+		}
+		doc.Content = string(data)
+	} else {
+		doc.Content = string(doc.CompressContent)
 	}
-	defer func(reader io.ReadCloser) {
-		_ = reader.Close()
-	}(reader)
-	data, err := io.ReadAll(reader)
-	if err != nil {
-		return err
-	}
-	doc.Content = string(data)
+
 	return nil
 }
 
@@ -152,7 +157,7 @@ func ReadDoc(r io.Reader, compressType int, decompress bool) (*Doc, error) {
 	if err != nil {
 		return nil, err
 	}
-	if decompress && compressType != NONE {
+	if decompress {
 		if doc.Key == EmptyDocKey {
 			doc.Content = EmptyDocKey
 			return &doc, nil
@@ -163,4 +168,42 @@ func ReadDoc(r io.Reader, compressType int, decompress bool) (*Doc, error) {
 		}
 	}
 	return &doc, err
+}
+
+// writeDoc write document to writer
+func (doc *Doc) writeDoc(w io.Writer) error {
+	// TODO:
+	var data []byte
+	var err error
+	switch doc.CompressType {
+	case NONE:
+		data = []byte(doc.Content)
+	case GZIP:
+		buf := bytes.Buffer{}
+		writer := gzip.NewWriter(&buf)
+		_, _ = writer.Write([]byte(doc.Content))
+		data = buf.Bytes()
+	default:
+		err = ErrNotSupport
+	}
+	if err != nil {
+		return err
+	}
+
+	key := []byte(doc.Key)
+	err = writeNode(w, key)
+	if err != nil {
+		return err
+	}
+	return writeNode(w, data)
+}
+
+func writeNode(w io.Writer, data []byte) (err error) {
+	keySize := int32(len(data))
+	err = binary.Write(w, binary.LittleEndian, &keySize)
+	if err != nil {
+		return err
+	}
+	_, err = w.Write(data)
+	return err
 }
