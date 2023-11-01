@@ -5,6 +5,7 @@ import (
 	"github.com/alecthomas/kong"
 	"github.com/skiloop/binfiles/binfile"
 	"os"
+	"runtime"
 )
 
 type ListCmd struct {
@@ -34,52 +35,56 @@ type SeekCmd struct {
 	Input  string `arg:"" help:"input file name"`
 	Offset int64  `arg:"" optional:"" help:"position to search from" default:"0"`
 }
+type PackageCmd struct {
+	Output            string `arg:"" help:"output bin file path"`
+	Path              string `arg:"" help:"input path where source files are"`
+	InputCompressType string `short:"c" help:"input file compression type" enum:"gzip,bz2,none" default:"none"`
+	Pattern           string `short:"p" help:"source file pattern, the matched will be packaged, all files package if empty" default:""`
+	WorkCount         int    `short:"w" help:"number of workers, when 0 or negative number of system processors will be used" default:"0"`
+}
 
 var client struct {
-	CompressType string    `short:"z" help:"compression type, options are gzip, bz2 and zip, default is gzip, none if do not want to compress" enum:"gzip,bz2,zip,none" default:"gzip"`
-	Verbose      bool      `short:"v" help:"verbose" default:"false"`
-	Debug        bool      `short:"d" help:"debug" default:"false"`
-	KeySizeLimit int32     `help:"max size of document key in bytes" default:"100"`
-	Step         int32     `short:"s" help:"how many docs to skip before next doc is processed, for count command means verbose step" default:"0"`
-	List         ListCmd   `cmd:"" aliases:"l,ls" help:"List documents from position."`
-	Read         ReadCmd   `cmd:"" aliases:"r,ra" help:"Read documents from position"`
-	Count        CountCmd  `cmd:"" aliases:"c" help:"count document file in bin file from position"`
-	Search       SearchCmd `cmd:"" aliases:"s" help:"search document by key"`
-	Seek         SeekCmd   `cmd:"" aliases:"k,sk" help:"seek for next document from position"`
+	CompressType string     `short:"z" help:"compression type, none if do not want to compress" enum:"gzip,bz2,none" default:"gzip"`
+	Verbose      bool       `short:"v" help:"verbose" default:"false"`
+	Debug        bool       `short:"d" help:"debug" default:"false"`
+	KeySizeLimit int32      `help:"max size of document key in bytes" default:"100"`
+	Step         int32      `short:"s" help:"how many docs to skip before next doc is processed, for count command means verbose step" default:"0"`
+	List         ListCmd    `cmd:"" aliases:"l,ls" help:"List documents from position."`
+	Read         ReadCmd    `cmd:"" aliases:"r,ra" help:"Read documents from position"`
+	Count        CountCmd   `cmd:"" aliases:"c" help:"count document file in bin file from position"`
+	Search       SearchCmd  `cmd:"" aliases:"s" help:"search document by key"`
+	Seek         SeekCmd    `cmd:"" aliases:"k,sk" help:"seek for next document from position"`
+	Package      PackageCmd `cmd:"" aliases:"p" help:"package files into bin file"`
 }
 
-func listDocs() {
-	ct, ok := binfile.CompressTypes[client.CompressType]
+func newReader(filename string, compress string) binfile.BinReader {
+	ct, ok := binfile.CompressTypes[compress]
 	if !ok {
 		_, _ = fmt.Fprintf(os.Stderr, "unknown compression type %s\n", client.CompressType)
-		return
+		return nil
 	}
-
-	br := binfile.NewBinReader(client.List.Input, ct)
-	if nil != br {
-		defer br.Close()
-		opt := binfile.ReadOption{
-			Offset: client.List.Offset,
-			Limit:  client.List.Limit,
-			Step:   client.Step,
-		}
-		br.List(&opt, client.List.KeyOnly)
-		return
-	}
-	_, _ = fmt.Fprintf(os.Stderr, "file not found: %s\n", client.List.Input)
+	return binfile.NewBinReader(filename, ct)
 }
 
-func readDocs() {
-	ct, ok := binfile.CompressTypes[client.CompressType]
+func newWriter(filename string, compress string) binfile.BinWriter {
+	ct, ok := binfile.CompressTypes[compress]
 	if !ok {
 		_, _ = fmt.Fprintf(os.Stderr, "unknown compression type %s\n", client.CompressType)
-		return
+		return nil
 	}
-	br := binfile.NewBinReader(client.Read.Input, ct)
-	if br == nil {
-		_, _ = fmt.Fprintf(os.Stderr, "file not found: %s\n", client.Read.Input)
-		return
+	return binfile.NewBinWriter(filename, ct)
+}
+
+func listDocs(br binfile.BinReader) {
+	opt := binfile.ReadOption{
+		Offset: client.List.Offset,
+		Limit:  client.List.Limit,
+		Step:   client.Step,
 	}
+	br.List(&opt, client.List.KeyOnly)
+}
+
+func readDocs(br binfile.BinReader) {
 	defer br.Close()
 	opt := binfile.ReadOption{
 		Offset: client.Read.Offset,
@@ -89,18 +94,8 @@ func readDocs() {
 	br.ReadDocs(&opt)
 }
 
-func countDocs() {
-	ct, ok := binfile.CompressTypes[client.CompressType]
-	if !ok {
-		_, _ = fmt.Fprintf(os.Stderr, "unknown compression type %s\n", client.CompressType)
-		return
-	}
-	br := binfile.NewBinReader(client.Count.Input, ct)
-	if br == nil {
-		_, _ = fmt.Fprintf(os.Stderr, "file not found: %s\n", client.Count.Input)
-		return
-	}
-	defer br.Close()
+func countDocs(br binfile.BinReader) {
+
 	var step uint32
 	if client.Step < 0 {
 		step = 0
@@ -114,19 +109,7 @@ func countDocs() {
 		fmt.Printf("%d\n", count)
 	}
 }
-func searchDocs() {
-	ct, ok := binfile.CompressTypes[client.CompressType]
-	if !ok {
-		_, _ = fmt.Fprintf(os.Stderr, "unknown compression type %s\n", client.CompressType)
-		return
-	}
-	br := binfile.NewBinReader(client.Search.Input, ct)
-	if br == nil {
-		_, _ = fmt.Fprintf(os.Stderr, "file not found: %s\n", client.Search.Input)
-		return
-	}
-	defer br.Close()
-
+func searchDocs(br binfile.BinReader) {
 	pos := br.Search(client.Search.Key, client.Search.Offset)
 	if pos < 0 {
 		_, _ = fmt.Fprintf(os.Stderr, "document with key %s not found", client.Search.Key)
@@ -139,18 +122,7 @@ func searchDocs() {
 	fmt.Printf("%10d\t%s\n", pos, doc.Content)
 }
 
-func seekDoc() {
-	ct, ok := binfile.CompressTypes[client.CompressType]
-	if !ok {
-		_, _ = fmt.Fprintf(os.Stderr, "unknown compression type %s\n", client.CompressType)
-		return
-	}
-	br := binfile.NewBinReader(client.Seek.Input, ct)
-	if br == nil {
-		_, _ = fmt.Fprintf(os.Stderr, "file not found: %s\n", client.Search.Input)
-		return
-	}
-	defer br.Close()
+func seekDoc(br binfile.BinReader) {
 	next, doc := br.Next(client.Seek.Offset)
 	if next < 0 {
 		fmt.Printf("no document found")
@@ -163,26 +135,71 @@ func seekDoc() {
 	fmt.Printf("%10d\t%s\n", next, doc.Content)
 }
 
+func packageDocs(bw binfile.BinWriter) {
+	ct, ok := binfile.CompressTypes[client.Package.InputCompressType]
+	if !ok {
+		_, _ = fmt.Fprintf(os.Stderr, "unknown compression type %s\n", client.CompressType)
+		return
+	}
+
+	opt := &binfile.PackageOption{
+		Path:          client.Package.Path,
+		Pattern:       client.Package.Pattern,
+		InputCompress: ct,
+		WorkCount:     client.Package.WorkCount,
+	}
+	if opt.WorkCount <= 0 {
+		opt.WorkCount = runtime.NumCPU()
+	}
+	err := bw.Package(opt)
+	if err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "package error: %v\n", err)
+	}
+}
+
+func execReadCmd(filename string, worker func(reader binfile.BinReader)) {
+	br := newReader(filename, client.CompressType)
+	if br == nil {
+		_, _ = fmt.Fprintf(os.Stderr, "file not found: %s\n", filename)
+		return
+	}
+	defer br.Close()
+	worker(br)
+}
+func execWriteCmd(filename string, worker func(reader binfile.BinWriter)) {
+	bw := newWriter(filename, client.CompressType)
+	if bw == nil {
+		_, _ = fmt.Fprintf(os.Stderr, "file not found: %s\n", filename)
+		return
+	}
+	defer bw.Close()
+	worker(bw)
+}
+
 func main() {
 	ctx := kong.Parse(&client)
-	binfile.Verbose = client.Verbose
 	binfile.Debug = client.Debug
+	binfile.Verbose = client.Verbose || client.Debug
+
 	binfile.KeySizeLimit = client.KeySizeLimit
 	switch ctx.Command() {
 	case "list <input>", "list <input> <offset>":
-		listDocs()
+		execReadCmd(client.List.Input, listDocs)
 		break
 	case "read <input>", "read <input> <offset>":
-		readDocs()
+		execReadCmd(client.Read.Input, readDocs)
 		break
 	case "count <input>", "count <input> <offset>":
-		countDocs()
+		execReadCmd(client.Count.Input, countDocs)
 		break
 	case "seek <input>", "seek <input> <offset>":
-		seekDoc()
+		execReadCmd(client.Seek.Input, seekDoc)
 		break
 	case "search <input> <key>", "search <input> <key> <offset>":
-		searchDocs()
+		execReadCmd(client.Search.Input, searchDocs)
+		break
+	case "package <output> <path>":
+		execWriteCmd(client.Package.Output, packageDocs)
 		break
 	default:
 		_, _ = fmt.Fprintf(os.Stderr, "unknown command: %s\n", ctx.Command())

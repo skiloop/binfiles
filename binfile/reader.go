@@ -17,7 +17,7 @@ type BinReader interface {
 var InvalidDocumentFound = errors.New("invalid document found")
 
 func NewBinReader(filename string, compressType int) BinReader {
-	bf := newBinFile(filename, compressType)
+	bf := newBinFile(filename, compressType, true)
 	if bf == nil {
 		return nil
 	}

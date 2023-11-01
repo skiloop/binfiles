@@ -8,9 +8,11 @@ type binFile struct {
 	compressType int
 }
 
-func newBinFile(filename string, compressType int) *binFile {
-	if _, err := os.Stat(filename); os.IsNotExist(err) {
-		return nil
+func newBinFile(filename string, compressType int, checkExist bool) *binFile {
+	if checkExist {
+		if _, err := os.Stat(filename); os.IsNotExist(err) {
+			return nil
+		}
 	}
 	return &binFile{filename: filename, compressType: compressType}
 }
