@@ -3,6 +3,7 @@ package binfile
 import (
 	"compress/gzip"
 	"fmt"
+	"github.com/skiloop/binfiles/binfile/filelock"
 	"io"
 	"io/fs"
 	"os"
@@ -10,8 +11,6 @@ import (
 	"regexp"
 	"strings"
 	"sync"
-	"syscall"
-	"time"
 )
 
 const endFlag = ""
@@ -49,42 +48,42 @@ func (dw *docWriter) Package(option *PackageOption) (err error) {
 	}
 
 	ch := make(chan string, option.WorkCount*3)
-	wg := &sync.WaitGroup{}
-	working := true
-	push := func(msg string) {
-		for {
-			select {
-			case ch <- msg:
-			default:
-			}
-			if working {
-				time.Sleep(time.Millisecond * 500)
-			} else {
-				break
-			}
-		}
-	}
-	go dw.startPackageWorkers(ch, &working, wg, option.WorkCount, option.InputCompress)
+	stopped := make(chan bool)
+
+	go dw.startPackageWorkers(ch, stopped, option.WorkCount, option.InputCompress)
 	err = filepath.WalkDir(option.Path, func(path string, d fs.DirEntry, err error) error {
 		if d.IsDir() || pattern != nil && !pattern.MatchString(path) {
 			return nil
 		}
-		ch <- path
-		return nil
+		select {
+		case ch <- path:
+			return nil
+		case <-stopped:
+			return fs.SkipDir
+		}
 	})
-	push(endFlag)
-	wg.Wait()
-	if Verbose {
-		fmt.Println("all workers stopped")
+
+	if err == nil {
+		ch <- endFlag
+		fmt.Println("path is walked, wait for all workers")
+		<-stopped
+		fmt.Printf("%s packaging done\n", option.Path)
+	} else {
+		fmt.Println("processing failed")
+		select {
+		case ch <- endFlag:
+		case <-stopped:
+		}
 	}
 	return err
 }
 
 func (dw *docWriter) startPackageWorkers(ch chan string,
-	working *bool, wg *sync.WaitGroup, workCount int, compress int) {
+	stopped chan bool, workCount int, compress int) {
+	wg := sync.WaitGroup{}
 	for workCount > 0 {
-		wg.Add(1)
 		go func(no int) {
+			wg.Add(1)
 			for {
 				path := <-ch
 				if path == endFlag {
@@ -98,9 +97,7 @@ func (dw *docWriter) startPackageWorkers(ch chan string,
 					fmt.Printf("[%d] process file %s\n", no, path)
 				}
 				if err := dw.writeFile(path, compress); err != nil {
-					if Verbose {
-						_, _ = fmt.Fprintf(os.Stderr, "worker %d stopped with error: %v\n", no, err)
-					}
+					_, _ = fmt.Fprintf(os.Stderr, "worker %d stopped with error: %v\n", no, err)
 					break
 				}
 			}
@@ -108,8 +105,10 @@ func (dw *docWriter) startPackageWorkers(ch chan string,
 		}(workCount)
 		workCount--
 	}
+	fmt.Println("wait for all workers")
 	wg.Wait()
-	*working = false
+	stopped <- true
+	fmt.Println("all workers stopped")
 }
 
 func readContent(path string, compress int) []byte {
@@ -156,12 +155,12 @@ func (dw *docWriter) writeFile(path string, compress int) error {
 	var err error
 	dw.lock.Lock()
 	defer dw.lock.Unlock()
-	if err = syscall.Flock(int(dw.file.Fd()), syscall.LOCK_EX); err != nil {
+	if err = filelock.Lock(*dw.file); err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "lock file error: %v\n", err)
 		return err
 	}
 	defer func() {
-		_ = syscall.Flock(int(dw.file.Fd()), syscall.LOCK_UN)
+		_ = filelock.UnLock(*dw.file)
 	}()
 	if err = doc.writeDoc(dw.file); Verbose && err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "%v\n", err)
