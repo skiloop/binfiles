@@ -20,14 +20,6 @@ type docWriter struct {
 	lock sync.Mutex
 }
 
-func (dw *docWriter) open() (err error) {
-	if Debug {
-		fmt.Printf("opening file %s for writing\n", dw.filename)
-	}
-	dw.file, err = os.OpenFile(dw.filename, os.O_APPEND|os.O_CREATE, 0o644)
-	return err
-}
-
 func (dw *docWriter) checkAndOpen() error {
 	if dw.file == nil {
 		return dw.open()
