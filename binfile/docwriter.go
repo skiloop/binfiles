@@ -2,6 +2,7 @@ package binfile
 
 import (
 	"compress/gzip"
+	"errors"
 	"fmt"
 	"github.com/skiloop/binfiles/binfile/filelock"
 	"io"
@@ -19,6 +20,8 @@ type docWriter struct {
 	binFile
 	lock sync.Mutex
 }
+
+var workersStopped = errors.New("workers stopped")
 
 func (dw *docWriter) checkAndOpen() error {
 	if dw.file == nil {
@@ -44,14 +47,25 @@ func (dw *docWriter) Package(option *PackageOption) (err error) {
 
 	go dw.startPackageWorkers(ch, stopped, option.WorkCount, option.InputCompress)
 	err = filepath.WalkDir(option.Path, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			// path will not be dir if err is not nil
+			// stop processing dir if read dir error
+			fmt.Printf("skip processing dir %s: %v\n", path, err)
+			return fs.SkipDir
+		}
+		// do not process dir (d is not nil if err is nil)
+		// filter out files those not match the pattern
 		if d.IsDir() || pattern != nil && !pattern.MatchString(path) {
 			return nil
 		}
+		// files are queue to processed
+		// and stop process
 		select {
 		case ch <- path:
 			return nil
 		case <-stopped:
-			return fs.SkipDir
+			// stop walking when workers stopped
+			return workersStopped
 		}
 	})
 
@@ -62,9 +76,14 @@ func (dw *docWriter) Package(option *PackageOption) (err error) {
 		fmt.Printf("%s packaging done\n", option.Path)
 	} else {
 		fmt.Println("processing failed")
-		select {
-		case ch <- endFlag:
-		case <-stopped:
+		if errors.Is(err, workersStopped) {
+			fmt.Println(err.Error())
+		} else {
+			fmt.Printf("%v\n", err)
+			select {
+			case ch <- endFlag:
+			case <-stopped:
+			}
 		}
 	}
 	return err
@@ -74,8 +93,9 @@ func (dw *docWriter) startPackageWorkers(ch chan string,
 	stopped chan bool, workCount int, compress int) {
 	wg := sync.WaitGroup{}
 	for workCount > 0 {
+		wg.Add(1)
 		go func(no int) {
-			wg.Add(1)
+			defer wg.Done()
 			for {
 				path := <-ch
 				if path == endFlag {
@@ -93,7 +113,6 @@ func (dw *docWriter) startPackageWorkers(ch chan string,
 					break
 				}
 			}
-			wg.Done()
 		}(workCount)
 		workCount--
 	}
