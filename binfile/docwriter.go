@@ -53,9 +53,9 @@ func (dw *docWriter) Package(option *PackageOption) (err error) {
 			fmt.Printf("skip processing dir %s: %v\n", path, err)
 			return fs.SkipDir
 		}
-		// do not process dir (d is not nil if err is nil)
+		// process only regular files (d is not nil if err is nil)
 		// filter out files those not match the pattern
-		if d.IsDir() || pattern != nil && !pattern.MatchString(path) {
+		if !fs.FileMode.IsRegular(d.Type()) || pattern != nil && !pattern.MatchString(path) {
 			return nil
 		}
 		// files are queue to processed
