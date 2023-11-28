@@ -22,8 +22,9 @@ type ReadCmd struct {
 }
 
 type CountCmd struct {
-	Input  string `arg:"" help:"input file name"`
-	Offset int64  `arg:"" optional:"" help:"start position" default:"0"`
+	Input       string `arg:"" help:"input file name"`
+	Offset      int64  `arg:"" optional:"" help:"start position" default:"0"`
+	WorkerCount int    `short:"w" help:"number of workers, when 0 or negative number of system processors will be used" default:"0"`
 }
 
 type SearchCmd struct {
@@ -40,7 +41,7 @@ type PackageCmd struct {
 	Path              string `arg:"" help:"input path where source files are"`
 	InputCompressType string `short:"c" help:"input file compression type" enum:"gzip,bz2,none" default:"none"`
 	Pattern           string `short:"p" help:"source file pattern, the matched will be packaged, all files package if empty" default:""`
-	WorkCount         int    `short:"w" help:"number of workers, when 0 or negative number of system processors will be used" default:"0"`
+	WorkerCount       int    `short:"w" help:"number of workers, when 0 or negative number of system processors will be used" default:"0"`
 }
 
 var client struct {
@@ -102,10 +103,8 @@ func countDocs(br binfile.BinReader) {
 	} else {
 		step = uint32(client.Step)
 	}
-	count, err := br.Count(client.Count.Offset, step)
-	if err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "file read error: %v\n", err)
-	} else {
+	count := br.Count(client.Count.Offset, client.Count.WorkerCount, step)
+	if count >= 0 {
 		fmt.Printf("%d\n", count)
 	}
 }
@@ -146,10 +145,10 @@ func packageDocs(bw binfile.BinWriter) {
 		Path:          client.Package.Path,
 		Pattern:       client.Package.Pattern,
 		InputCompress: ct,
-		WorkCount:     client.Package.WorkCount,
+		WorkerCount:   client.Package.WorkerCount,
 	}
-	if opt.WorkCount <= 0 {
-		opt.WorkCount = runtime.NumCPU()
+	if opt.WorkerCount <= 0 {
+		opt.WorkerCount = runtime.NumCPU()
 	}
 	err := bw.Package(opt)
 	if err != nil {

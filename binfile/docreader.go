@@ -61,7 +61,7 @@ func (dr *docReader) ReadDocs(opt *ReadOption) {
 func (dr *docReader) skipDocs(count int32) {
 	var err error
 	for count > 0 {
-		err = dr.seekNext()
+		err = dr.skipNext()
 		if err != nil {
 			break
 		}
@@ -70,44 +70,105 @@ func (dr *docReader) skipDocs(count int32) {
 }
 
 // Count how many documents in file start from offset
-func (dr *docReader) Count(offset int64, verboseStep uint32) (count uint32, err error) {
-	var curPos int64
-	count = 0
-	curPos, err = dr.openAndSeek(offset)
+func (dr *docReader) Count(offset int64, nThreads int, verboseStep uint32) int64 {
+	err := dr.checkAndOpen()
 	if err != nil {
-		return count, err
+		_, _ = fmt.Fprintf(os.Stderr, "\nfile open error\n%v", err)
+		return -1
 	}
-	var nextVerbose = count + 1
+
+	readSize, err := dr.file.Seek(0, 2)
+	if err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "\nseek file error\n%v", err)
+		return -1
+	}
+
+	if offset >= readSize {
+		return 0
+	}
+
+	if nThreads <= 1 {
+		return simpleCount(dr.file, offset, -1, 0, verboseStep)
+	}
+	workerReadSize := readSize / int64(nThreads)
+	countCh := make(chan int64, nThreads)
+
+	for no := 0; no < nThreads; no++ {
+		go conCount(countCh, dr.filename, offset, offset+workerReadSize, dr.compressType, no, verboseStep)
+		offset += workerReadSize
+		if offset > readSize {
+			offset = readSize
+		}
+	}
+	total := int64(0)
+	for no := 0; no < nThreads; no++ {
+		cnt := <-countCh
+		if cnt < 0 {
+			total = -1
+		} else {
+			total += cnt
+		}
+	}
+	return total
+}
+
+func conCount(ch chan int64, fn string, start, end int64, ct, no int, verboseStep uint32) {
+	br := &docReader{binFile: *newBinFile(fn, ct, false)}
+	pos, doc := br.Next(start)
+	if doc != nil {
+		count := simpleCount(br.file, pos, end, no, verboseStep)
+		ch <- count
+	} else {
+		ch <- 0
+	}
+}
+
+func simpleCount(fs *os.File, start, end int64, no int, verboseStep uint32) (count int64) {
+	count = 0
+	curPos, err := fs.Seek(start, 0)
+	fmt.Printf("count fd: %d\n", fs.Fd())
+	if err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "\n[%d]read doc error at %d\n%v", no, curPos, err)
+		return -1
+	}
+	var nextVerbose = uint32(1)
 	if Verbose {
-		fmt.Printf("count how many documents from position %d\n", offset)
+		if end != -1 {
+			fmt.Printf("[%d] count how many documents from position %d to %d\n", no, start, end)
+		} else {
+			fmt.Printf("[%d] count how many documents from position %d to end\n", no, start)
+		}
 	}
 	for {
-		err = dr.seekNext()
+		err = skipOne(fs)
 		if err == io.EOF {
 			break
 		}
 		if err != nil {
-			_, _ = fmt.Fprintf(os.Stderr, "\nread doc error at %d\n%v", curPos, err)
-			return count, err
+			break
 		}
 		count++
-		if Verbose && count == nextVerbose {
-			fmt.Printf("got %10d documents from %20d to position %20d\n", count, offset, curPos)
+		if Verbose && uint32(count) == nextVerbose {
+			fmt.Printf("[%d] got %10d documents from %20d to position %20d\n", no, count, start, curPos)
 			if verboseStep == 0 {
 				nextVerbose = nextVerbose * 10
 			} else {
 				nextVerbose = nextVerbose + verboseStep
 			}
 		}
-		curPos, err = dr.file.Seek(0, 1)
-		if err == io.EOF {
+		curPos, err = fs.Seek(0, 1)
+		if err == io.EOF || end >= 0 && curPos > end {
 			break
 		}
 		if err != nil {
-			return count, err
+			break
 		}
 	}
-	return count, nil
+	if err != nil && err != io.EOF {
+		_, _ = fmt.Fprintf(os.Stderr, "\n[%d] read doc error at %d\n%v", no, curPos, err)
+		return -1
+	}
+	return count
 }
 
 func (dr *docReader) ReadKey() (doc *DocKey, err error) {
@@ -210,27 +271,26 @@ func (dr *docReader) Search(key string, offset int64) int64 {
 	return -1
 }
 
-// seekNext seek next document
-func (dr *docReader) seekNext() (err error) {
+func skipOne(fs *os.File) (err error) {
 	var offset int64
 	var size int32
-	offset, err = dr.file.Seek(0, 1)
+	offset, err = fs.Seek(0, 1)
 	if err != nil {
 		return err
 	}
 	defer func() {
 		if err != nil {
-			dr.resetOffset(offset)
+			_, _ = fs.Seek(offset, 0)
 		}
 	}()
 	// read key size
-	size, err = ReadKeySize(dr.file)
+	size, err = ReadKeySize(fs)
 	if err != nil {
 
 		return err
 	}
 	// skip to value size
-	_, err = dr.file.Seek(int64(size), 1)
+	_, err = fs.Seek(int64(size), 1)
 	if err != nil {
 		if err == io.EOF {
 			err = InvalidDocumentFound
@@ -238,7 +298,7 @@ func (dr *docReader) seekNext() (err error) {
 		return err
 	}
 	// read value size
-	size, err = ReadKeySize(dr.file)
+	size, err = ReadKeySize(fs)
 	if err != nil {
 		if err == io.EOF {
 			err = InvalidDocumentFound
@@ -246,11 +306,16 @@ func (dr *docReader) seekNext() (err error) {
 		return err
 	}
 	// skip value bytes
-	_, err = dr.file.Seek(int64(size), 1)
+	_, err = fs.Seek(int64(size), 1)
 	if err == io.EOF {
 		err = nil
 	}
 	return err
+}
+
+// skipNext skip next document
+func (dr *docReader) skipNext() error {
+	return skipOne(dr.file)
 }
 
 // Next document position

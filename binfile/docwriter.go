@@ -42,10 +42,10 @@ func (dw *docWriter) Package(option *PackageOption) (err error) {
 		}
 	}
 
-	ch := make(chan string, option.WorkCount*3)
+	ch := make(chan string, option.WorkerCount*3)
 	stopped := make(chan bool)
 
-	go dw.startPackageWorkers(ch, stopped, option.WorkCount, option.InputCompress)
+	go dw.startPackageWorkers(ch, stopped, option.WorkerCount, option.InputCompress)
 	err = filepath.WalkDir(option.Path, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			// path will not be dir if err is not nil
