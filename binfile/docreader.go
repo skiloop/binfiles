@@ -245,15 +245,15 @@ func (dr *docReader) List(opt *ReadOption, keyOnly bool) {
 }
 
 // Search document in bin file
-func (dr *docReader) Search(key string, offset int64) int64 {
-	_, err := dr.openAndSeek(offset)
+func (dr *docReader) Search(opt SearchOption) int64 {
+	_, err := dr.openAndSeek(opt.Offset)
 	if err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "%v\n", err)
 		return -1
 	}
-	reg, err := regexp.Compile(key)
+	reg, err := regexp.Compile(opt.Key)
 	if err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "invalid key pattern %s, %v\n", key, err)
+		_, _ = fmt.Fprintf(os.Stderr, "invalid key pattern %s, %v\n", opt.Key, err)
 		return -1
 	}
 	var docPos int64 = -1

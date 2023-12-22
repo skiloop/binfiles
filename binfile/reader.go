@@ -10,7 +10,7 @@ type BinReader interface {
 	ReadDocs(opt *ReadOption)
 	Count(offset int64, nThreads int, verboseStep uint32) int64
 	List(opt *ReadOption, keyOnly bool)
-	Search(key string, offset int64) int64
+	Search(opt SearchOption) int64
 	Next(offset int64) (pos int64, doc *Doc)
 }
 

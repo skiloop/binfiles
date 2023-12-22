@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"github.com/alecthomas/kong"
 	"github.com/skiloop/binfiles/binfile"
@@ -30,12 +32,15 @@ type CountCmd struct {
 type SearchCmd struct {
 	Input  string `arg:"" help:"input file name"`
 	Key    string `arg:"" help:"key to search, regex supported"`
+	Pretty bool   `short:"p" help:"value is a json, and pretty output when found" default:"false"`
 	Offset int64  `arg:"" optional:"" help:"position to search from" default:"0"`
 }
+
 type SeekCmd struct {
 	Input  string `arg:"" help:"input file name"`
 	Offset int64  `arg:"" optional:"" help:"position to search from" default:"0"`
 }
+
 type PackageCmd struct {
 	Output            string `arg:"" help:"output bin file path"`
 	Path              string `arg:"" help:"input path where source files are"`
@@ -108,8 +113,19 @@ func countDocs(br binfile.BinReader) {
 		fmt.Printf("%d\n", count)
 	}
 }
+
+func JsonPrettify(content []byte) (error, *bytes.Buffer) {
+	var prettyJSON bytes.Buffer
+	err := json.Indent(&prettyJSON, content, "", "\t")
+	if err != nil {
+		return err, nil
+	}
+	return nil, &prettyJSON
+}
+
 func searchDocs(br binfile.BinReader) {
-	pos := br.Search(client.Search.Key, client.Search.Offset)
+	opt := binfile.SearchOption{Key: client.Search.Key, Offset: client.Search.Offset}
+	pos := br.Search(opt)
 	if pos < 0 {
 		_, _ = fmt.Fprintf(os.Stderr, "document with key %s not found", client.Search.Key)
 		return
@@ -117,8 +133,18 @@ func searchDocs(br binfile.BinReader) {
 	doc, err := br.ReadAt(pos, true)
 	if err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "document found at %d but read error: %v\n", pos, err)
+		return
 	}
-	fmt.Printf("%10d\t%s\n", pos, doc.Content)
+	if !client.Search.Pretty {
+		fmt.Printf("%10d\t%s\n", pos, doc.Content)
+		return
+	}
+	err, buf := JsonPrettify([]byte(doc.Content))
+	if err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "json prettify failed: %v\n", err)
+		return
+	}
+	_, _ = buf.WriteTo(os.Stdout)
 }
 
 func seekDoc(br binfile.BinReader) {
