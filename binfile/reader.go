@@ -32,5 +32,6 @@ type ReadOption struct {
 
 type SearchOption struct {
 	Key    string `json:"key to search"`
+	Number int    `json:"skip the n of found docs. If less then n docs found then return last one"`
 	Offset int64  `json:"start offset to search"`
 }

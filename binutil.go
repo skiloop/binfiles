@@ -124,7 +124,12 @@ func JsonPrettify(content []byte) (error, *bytes.Buffer) {
 }
 
 func searchDocs(br binfile.BinReader) {
-	opt := binfile.SearchOption{Key: client.Search.Key, Offset: client.Search.Offset}
+	opt := binfile.SearchOption{Key: client.Search.Key, Offset: client.Search.Offset, Number: int(client.Step)}
+	if binfile.Verbose {
+		fmt.Printf("Key   : %s\n", opt.Key)
+		fmt.Printf("Offset: %d\n", opt.Offset)
+		fmt.Printf("Number: %d\n", opt.Number)
+	}
 	pos := br.Search(opt)
 	if pos < 0 {
 		_, _ = fmt.Fprintf(os.Stderr, "document with key %s not found", client.Search.Key)

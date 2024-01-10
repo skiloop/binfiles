@@ -3,8 +3,10 @@ package binfile
 import (
 	"fmt"
 	"io"
+	"math/rand"
 	"os"
 	"regexp"
+	"time"
 )
 
 type docReader struct {
@@ -258,17 +260,32 @@ func (dr *docReader) Search(opt SearchOption) int64 {
 	}
 	var docPos int64 = -1
 	var doc *DocKey
+	var found int64 = -1
+	skip := opt.Number
+	if skip < 0 {
+		rand.Seed(time.Now().Unix())
+		skip = rand.Intn(100)
+	}
+	if Verbose {
+		fmt.Printf("skip: %d\n", skip)
+	}
 	for {
 		docPos, _ = dr.file.Seek(0, 1)
 		doc, err = dr.ReadKey()
 		if err == io.EOF || doc == nil {
 			break
 		}
+
 		if reg.MatchString(doc.Key) {
-			return docPos
+			found = docPos
+			if skip > 0 {
+				skip--
+			} else {
+				break
+			}
 		}
 	}
-	return -1
+	return found
 }
 
 func skipOne(fs *os.File) (err error) {
