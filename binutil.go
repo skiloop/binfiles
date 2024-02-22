@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/alecthomas/kong"
 	"github.com/skiloop/binfiles/binfile"
+	"github.com/skiloop/binfiles/version"
 	"os"
 	"runtime"
 )
@@ -48,6 +49,8 @@ type PackageCmd struct {
 	Pattern           string `short:"p" help:"source file pattern, the matched will be packaged, all files package if empty" default:""`
 	WorkerCount       int    `short:"w" help:"number of workers, when 0 or negative number of system processors will be used" default:"0"`
 }
+type VersionCmd struct {
+}
 
 var client struct {
 	CompressType string     `short:"z" help:"compression type, none if do not want to compress" enum:"gzip,bz2,none" default:"gzip"`
@@ -55,6 +58,7 @@ var client struct {
 	Debug        bool       `short:"d" help:"debug" default:"false"`
 	KeySizeLimit int32      `help:"max size of document key in bytes" default:"1000"`
 	Step         int32      `short:"s" help:"how many docs to skip before next doc is processed, for count command means verbose step" default:"0"`
+	Version      VersionCmd `cmd:"" help:"print version" default:"withargs"`
 	List         ListCmd    `cmd:"" aliases:"l,ls" help:"List documents from position."`
 	Read         ReadCmd    `cmd:"" aliases:"r,ra" help:"Read documents from position"`
 	Count        CountCmd   `cmd:"" aliases:"c" help:"count document file in bin file from position"`
@@ -232,7 +236,6 @@ func main() {
 		execWriteCmd(client.Package.Output, packageDocs)
 		break
 	default:
-		_, _ = fmt.Fprintf(os.Stderr, "unknown command: %s\n", ctx.Command())
-		_ = ctx.PrintUsage(true)
+		fmt.Println(version.BuildVersion())
 	}
 }
