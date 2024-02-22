@@ -19,7 +19,7 @@ const (
 	LZ4
 )
 
-var KeySizeLimit int32 = 100
+var KeySizeLimit int32 = 1000
 var EmptyDocKey = "empty-doc."
 
 var CompressTypes = map[string]int{
