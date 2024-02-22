@@ -53,7 +53,7 @@ var client struct {
 	CompressType string     `short:"z" help:"compression type, none if do not want to compress" enum:"gzip,bz2,none" default:"gzip"`
 	Verbose      bool       `short:"v" help:"verbose" default:"false"`
 	Debug        bool       `short:"d" help:"debug" default:"false"`
-	KeySizeLimit int32      `help:"max size of document key in bytes" default:"100"`
+	KeySizeLimit int32      `help:"max size of document key in bytes" default:"1000"`
 	Step         int32      `short:"s" help:"how many docs to skip before next doc is processed, for count command means verbose step" default:"0"`
 	List         ListCmd    `cmd:"" aliases:"l,ls" help:"List documents from position."`
 	Read         ReadCmd    `cmd:"" aliases:"r,ra" help:"Read documents from position"`
