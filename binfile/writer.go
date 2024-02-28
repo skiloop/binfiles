@@ -18,9 +18,9 @@ type BinWriter interface {
 }
 
 func NewBinWriter(filename string, compressType int) BinWriter {
-	bf := newBinFile(filename, compressType, false)
+	bf := newBinWriterFile(filename, compressType)
 	if bf == nil {
 		return nil
 	}
-	return &docWriter{*bf, sync.Mutex{}}
+	return &docWriter{binWriterFile: *bf, mu: sync.Mutex{}}
 }

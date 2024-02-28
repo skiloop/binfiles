@@ -4,7 +4,7 @@ package binfile
 //if len(files) <= 1 {
 //	return nil
 //}
-//target, err := os.OpenFile(dst, os.O_CREATE|os.O_APPEND, 0o644)
+//target, err := os.OpenFile(dst, os.O_CREATE|os.O_APPEND, 0644)
 //if err != nil {
 //	return err
 //}

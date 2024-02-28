@@ -17,17 +17,43 @@ import (
 const endFlag = ""
 
 type docWriter struct {
-	binFile
-	lock sync.Mutex
+	binWriterFile
+	fn *os.File
+	mu sync.Mutex
 }
 
 var workersStopped = errors.New("workers stopped")
 
 func (dw *docWriter) checkAndOpen() error {
-	if dw.file == nil {
-		return dw.open()
+	if dw.file != nil {
+		return nil
 	}
+	fn, err := os.OpenFile(dw.filename, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0x644)
+	if err != nil {
+		return err
+	}
+	dw.fn = fn
+	dw.file = fn
 	return nil
+}
+
+func (dw *docWriter) lock() error {
+	dw.mu.Lock()
+	err := filelock.Lock(*dw.fn)
+	if err == nil {
+		return nil
+	}
+	dw.mu.Unlock()
+	return err
+}
+
+func (dw *docWriter) unlock() error {
+	err := filelock.UnLock(*dw.fn)
+	if err == nil {
+		dw.mu.Unlock()
+		return nil
+	}
+	return err
 }
 
 func (dw *docWriter) Open() error {
@@ -167,16 +193,21 @@ func (dw *docWriter) writeFile(path string, compress int) error {
 	doc := &Doc{CompressType: dw.compressType}
 	doc.Key = parts[len(parts)-1]
 	doc.Content = string(content)
+	return dw.Write(doc)
+}
+
+func (dw *docWriter) Write(doc *Doc) error {
 	var err error
-	dw.lock.Lock()
-	defer dw.lock.Unlock()
-	if err = filelock.Lock(*dw.file); err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "lock file error: %v\n", err)
+	if err = dw.lock(); err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "mu file error: %v\n", err)
 		return err
 	}
 	defer func() {
-		_ = filelock.UnLock(*dw.file)
+		_ = dw.unlock()
 	}()
+	if doc.CompressType != dw.compressType {
+		doc.CompressType = dw.compressType
+	}
 	if err = doc.writeDoc(dw.file); Verbose && err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "%v\n", err)
 		return err

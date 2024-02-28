@@ -170,7 +170,7 @@ func ReadDoc(r io.Reader, compressType int, decompress bool) (*Doc, error) {
 	return &doc, err
 }
 
-// writeDoc write document to writer
+// writeDoc Write document to writer
 func (doc *Doc) writeDoc(w io.Writer) error {
 	var data []byte
 	var err error

@@ -17,11 +17,11 @@ type BinReader interface {
 var InvalidDocumentFound = errors.New("invalid document found")
 
 func NewBinReader(filename string, compressType int) BinReader {
-	bf := newBinFile(filename, compressType, true)
+	bf := newBinReaderFile(filename, compressType, true)
 	if bf == nil {
 		return nil
 	}
-	return &docReader{*bf}
+	return &docReader{binReaderFile: *bf}
 }
 
 type ReadOption struct {

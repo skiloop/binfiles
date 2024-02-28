@@ -10,20 +10,37 @@ import (
 )
 
 type docReader struct {
-	binFile
+	binReaderFile
+	fn *os.File
 }
 
 func (dr *docReader) Open() error {
-	return dr.checkAndOpen()
+	if dr.file != nil {
+		return nil
+	}
+	fn, err := os.OpenFile(dr.filename, os.O_RDONLY, 0644)
+	if err != nil {
+		return err
+	}
+	dr.fn = fn
+	dr.file = fn
+	return nil
+}
+func (dr *docReader) openAt(offset int64) (int64, error) {
+	err := dr.Open()
+	if err != nil {
+		return 0, err
+	}
+	pos, err := dr.Seek(offset, 0)
+	if err != nil {
+		return pos, err
+	}
+	return 0, nil
 }
 
 // ReadAt read doc at specified position
 func (dr *docReader) ReadAt(offset int64, decompress bool) (doc *Doc, err error) {
-	if err = dr.Open(); err != nil {
-		return nil, err
-	}
-	_, err = dr.Seek(offset, 0)
-	if err != nil {
+	if _, err = dr.openAt(offset); err != nil {
 		return nil, err
 	}
 	//pos, err := dr.Seek(0, 1)
@@ -34,7 +51,7 @@ func (dr *docReader) ReadAt(offset int64, decompress bool) (doc *Doc, err error)
 // ReadDocs doc at specified position
 func (dr *docReader) ReadDocs(opt *ReadOption) {
 	var err error
-	if _, err = dr.openAndSeek(opt.Offset); err != nil {
+	if _, err = dr.openAt(opt.Offset); err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "open error: %v\n", err)
 		return
 	}
@@ -77,15 +94,9 @@ func (dr *docReader) skipDocs(count int32) {
 
 // Count how many documents in file start from offset
 func (dr *docReader) Count(offset int64, nThreads int, verboseStep uint32) int64 {
-	err := dr.Open()
+	readSize, err := dr.openAt(offset)
 	if err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "\nfile open error\n%v", err)
-		return -1
-	}
-
-	readSize, err := dr.Seek(0, 2)
-	if err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "\nseek file error\n%v", err)
 		return -1
 	}
 
@@ -94,7 +105,7 @@ func (dr *docReader) Count(offset int64, nThreads int, verboseStep uint32) int64
 	}
 
 	if nThreads <= 1 {
-		return simpleCount(dr.file, offset, -1, 0, verboseStep)
+		return simpleCount(dr.fn, offset, -1, 0, verboseStep)
 	}
 	workerReadSize := readSize / int64(nThreads)
 	countCh := make(chan int64, nThreads)
@@ -118,11 +129,19 @@ func (dr *docReader) Count(offset int64, nThreads int, verboseStep uint32) int64
 	return total
 }
 
+func newDocReader(filename string, compressType int) *docReader {
+	bf := newBinReaderFile(filename, compressType, true)
+	if nil == bf {
+		return nil
+	}
+	return &docReader{binReaderFile: *bf}
+}
+
 func conCount(ch chan int64, fn string, start, end int64, ct, no int, verboseStep uint32) {
-	br := &docReader{binFile: *newBinFile(fn, ct, false)}
+	br := newDocReader(fn, ct)
 	pos, doc := br.Next(start)
 	if doc != nil {
-		count := simpleCount(br.file, pos, end, no, verboseStep)
+		count := simpleCount(br.fn, pos, end, no, verboseStep)
 		ch <- count
 	} else {
 		ch <- 0
@@ -205,18 +224,9 @@ func (dr *docReader) resetOffset(offset int64) {
 	_, _ = dr.Seek(offset, 0)
 }
 
-func (dr *docReader) openAndSeek(offset int64) (int64, error) {
-	var err error
-	if err = dr.checkAndOpen(); err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "%v\n", err)
-		return -1, err
-	}
-	return dr.Seek(offset, 0)
-}
-
 // List documents in bin file
 func (dr *docReader) List(opt *ReadOption, keyOnly bool) {
-	docPos, err := dr.openAndSeek(opt.Offset)
+	docPos, err := dr.openAt(opt.Offset)
 	if err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "%v\n", err)
 		return
@@ -252,7 +262,7 @@ func (dr *docReader) List(opt *ReadOption, keyOnly bool) {
 
 // Search document in bin file
 func (dr *docReader) Search(opt SearchOption) int64 {
-	_, err := dr.openAndSeek(opt.Offset)
+	_, err := dr.openAt(opt.Offset)
 	if err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "%v\n", err)
 		return -1
@@ -336,13 +346,13 @@ func skipOne(fs *os.File) (err error) {
 
 // skipNext skip next document
 func (dr *docReader) skipNext() error {
-	return skipOne(dr.file)
+	return skipOne(dr.fn)
 }
 
 // Next document position
 func (dr *docReader) Next(offset int64) (pos int64, doc *Doc) {
 	var err error
-	_, err = dr.openAndSeek(offset)
+	_, err = dr.openAt(offset)
 	if err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "%v\n", err)
 		return -1, nil
@@ -367,4 +377,13 @@ func (dr *docReader) Next(offset int64) (pos int64, doc *Doc) {
 		}
 		pos += 1
 	}
+}
+
+// Next document position
+func (dr *docReader) next() (doc *Doc, err error) {
+	doc, err = ReadDoc(dr.file, dr.compressType, true)
+	if err == io.EOF {
+		return nil, nil
+	}
+	return doc, err
 }
