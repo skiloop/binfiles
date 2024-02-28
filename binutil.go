@@ -53,18 +53,19 @@ type VersionCmd struct {
 }
 
 var client struct {
-	CompressType string     `short:"z" help:"compression type, none if do not want to compress" enum:"gzip,bz2,none" default:"gzip"`
-	Verbose      bool       `short:"v" help:"verbose" default:"false"`
-	Debug        bool       `short:"d" help:"debug" default:"false"`
-	KeySizeLimit int32      `help:"max size of document key in bytes" default:"1000"`
-	Step         int32      `short:"s" help:"how many docs to skip before next doc is processed, for count command means verbose step" default:"0"`
-	Version      VersionCmd `cmd:"" help:"print version" default:"withargs"`
-	List         ListCmd    `cmd:"" aliases:"l,ls" help:"List documents from position."`
-	Read         ReadCmd    `cmd:"" aliases:"r,ra" help:"Read documents from position"`
-	Count        CountCmd   `cmd:"" aliases:"c" help:"count document file in bin file from position"`
-	Search       SearchCmd  `cmd:"" aliases:"s" help:"search document by key"`
-	Seek         SeekCmd    `cmd:"" aliases:"k,sk" help:"seek for next document from position"`
-	Package      PackageCmd `cmd:"" aliases:"p" help:"package files into bin file"`
+	CompressType string            `short:"z" help:"compression type, none if do not want to compress" enum:"gzip,bz2,none" default:"gzip"`
+	Verbose      bool              `short:"v" help:"verbose" default:"false"`
+	Debug        bool              `short:"d" help:"debug" default:"false"`
+	KeySizeLimit int32             `help:"max size of document key in bytes" default:"1000"`
+	Step         int32             `short:"s" help:"how many docs to skip before next doc is processed, for count command means verbose step" default:"0"`
+	Version      VersionCmd        `cmd:"" help:"print version" default:"withargs"`
+	List         ListCmd           `cmd:"" aliases:"l,ls" help:"List documents from position."`
+	Read         ReadCmd           `cmd:"" aliases:"r,ra" help:"Read documents from position"`
+	Count        CountCmd          `cmd:"" aliases:"c" help:"count document file in bin file from position"`
+	Search       SearchCmd         `cmd:"" aliases:"s" help:"search document by key"`
+	Seek         SeekCmd           `cmd:"" aliases:"k,sk" help:"seek for next document from position"`
+	Package      PackageCmd        `cmd:"" aliases:"p" help:"package files into bin file"`
+	Repack       binfile.RepackCmd `cmd:"" aliases:"a" help:"repack file"`
 }
 
 func newReader(filename string, compress string) binfile.BinReader {
@@ -234,6 +235,12 @@ func main() {
 		break
 	case "package <output> <path>":
 		execWriteCmd(client.Package.Output, packageDocs)
+		break
+	case "repack <source> <target>":
+		err := binfile.Repack(client.Repack)
+		if err != nil {
+			_, _ = fmt.Fprintf(os.Stderr, "repack error: %v", err)
+		}
 		break
 	default:
 		fmt.Println(version.BuildVersion())
