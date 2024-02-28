@@ -35,3 +35,7 @@ func (dr *binFile) checkAndOpen() error {
 	}
 	return nil
 }
+
+func (dr *binFile) Seek(pos int64, whence int) (int64, error) {
+	return dr.file.Seek(pos, whence)
+}

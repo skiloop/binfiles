@@ -30,9 +30,13 @@ func (dw *docWriter) checkAndOpen() error {
 	return nil
 }
 
+func (dw *docWriter) Open() error {
+	return dw.checkAndOpen()
+}
+
 // Package files to bin file
 func (dw *docWriter) Package(option *PackageOption) (err error) {
-	if err = dw.checkAndOpen(); err != nil {
+	if err = dw.Open(); err != nil {
 		return err
 	}
 	var pattern *regexp.Regexp
