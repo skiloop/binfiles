@@ -45,7 +45,7 @@ type SeekCmd struct {
 type PackageCmd struct {
 	Output            string `arg:"" help:"output bin file path"`
 	Path              string `arg:"" help:"input path where source files are"`
-	InputCompressType string `short:"c" help:"input file compression type" enum:"gzip,bz2,br,brotli,lz4,none" default:"none"`
+	InputCompressType string `short:"c" help:"input file compression type" enum:"gzip,bz2,xz,br,brotli,lz4,none" default:"none"`
 	Pattern           string `short:"p" help:"source file pattern, the matched will be packaged, all files package if empty" default:""`
 	WorkerCount       int    `short:"w" help:"number of workers, when 0 or negative number of system processors will be used" default:"0"`
 }
@@ -53,7 +53,7 @@ type VersionCmd struct {
 }
 
 var client struct {
-	CompressType string            `short:"z" help:"compression type, none if do not want to compress" enum:"gzip,bz2,none" default:"gzip"`
+	CompressType string            `short:"z" help:"compression type, none if do not want to compress" enum:"gzip,xz,br,lz4,bz2,none" default:"gzip"`
 	Verbose      bool              `short:"v" help:"verbose" default:"false"`
 	Debug        bool              `short:"d" help:"debug" default:"false"`
 	KeySizeLimit int32             `help:"max size of document key in bytes" default:"1000"`
@@ -65,7 +65,7 @@ var client struct {
 	Search       SearchCmd         `cmd:"" aliases:"s" help:"search document by key"`
 	Seek         SeekCmd           `cmd:"" aliases:"k,sk" help:"seek for next document from position"`
 	Package      PackageCmd        `cmd:"" aliases:"p" help:"package files into bin file"`
-	Repack       binfile.RepackCmd `cmd:"" aliases:"a" help:"repack file"`
+	Repack       binfile.RepackCmd `cmd:"" aliases:"a" help:"repack bin file into other bin format"`
 }
 
 func newReader(filename string, compress string) binfile.BinReader {

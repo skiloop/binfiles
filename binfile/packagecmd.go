@@ -45,12 +45,13 @@ func (r *repackager) nextPackager() *Packager {
 	}
 	return writer
 }
+
 func (r *repackager) seeder() {
 	fmt.Println("reader starts")
 	for {
 		offset, _ := r.reader.Seek(0, 1)
 		doc, err := r.reader.next()
-		if errors.Is(err, ValueDecompressError) {
+		if errors.Is(err, ErrValueDecompress) {
 			_, _ = fmt.Fprintf(os.Stderr, "doc read error at %d: %v\n", offset, err)
 			continue
 		}
@@ -66,6 +67,7 @@ func (r *repackager) seeder() {
 	r.docCh <- nil
 	fmt.Println("reader done")
 }
+
 func (r *repackager) merger(stopCh chan interface{}) {
 	wtr, err := os.OpenFile(r.target, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 	if err != nil {
@@ -104,11 +106,13 @@ func (r *repackager) merger(stopCh chan interface{}) {
 	stopCh <- nil
 	fmt.Println("merger done")
 }
+
 func (r *repackager) notifyMerge(filename string) {
 	if r.merge {
 		r.filenameCh <- filename
 	}
 }
+
 func (r *repackager) worker(no int) {
 	fmt.Printf("worker %d started\n", no)
 	var err error
