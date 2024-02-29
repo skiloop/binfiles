@@ -2,9 +2,9 @@ package binfile
 
 import (
 	"compress/gzip"
-	"errors"
-	"fmt"
+	"github.com/andybalholm/brotli"
 	"github.com/dsnet/compress/bzip2"
+	"github.com/pierrec/lz4"
 	"io"
 	"os"
 )
@@ -27,11 +27,16 @@ func getCompressCloser(compressType int, fn *os.File) (io.WriteCloser, error) {
 	switch compressType {
 	case BZIP2:
 		return bzip2.NewWriter(fn, nil)
+	case LZ4:
+		return lz4.NewWriter(fn), nil
+	case BROTLI:
+		return brotli.NewWriter(fn), nil
 	case GZIP:
+		fallthrough
 	default:
 		return gzip.NewWriter(fn), nil
 	}
-	return nil, errors.New(fmt.Sprintf("unknown package compression type %d", compressType))
+	//return nil, errors.New(fmt.Sprintf("unknown package compression type %d", compressType))
 }
 
 func newPackager(filename string, packageCompressType int) *Packager {
