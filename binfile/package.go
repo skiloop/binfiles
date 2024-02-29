@@ -9,8 +9,8 @@ type packageHeader struct {
 	lock         sync.RWMutex
 }
 
-type docPackage struct {
-}
+//type docPackage struct {
+//}
 
 type DocPackageWriter struct {
 	docWriter

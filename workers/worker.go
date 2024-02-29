@@ -2,32 +2,32 @@ package workers
 
 import (
 	"fmt"
-	"sync"
 	"time"
 )
 
 type JobsRunner struct {
 	WorkCount int
-	Task      func(group *sync.WaitGroup, no int)
-	Seeder    func(group *sync.WaitGroup)
+	Task      func(no int)
+	Seeder    func()
 }
 
-func (jr *JobsRunner) Run() {
+func (jr *JobsRunner) Run(stopCh chan interface{}) {
 	start := time.Now()
-	wg := new(sync.WaitGroup)
 	if jr.Seeder != nil {
-		go jr.Seeder(wg)
+		go jr.Seeder()
 	}
 	for no := 0; no < jr.WorkCount; no++ {
-		go jr.Task(wg, no)
+		go jr.Task(no)
 	}
-	time.Sleep(10 * time.Millisecond)
-	wg.Wait()
+	// wait for all task done
+	for no := 0; no < jr.WorkCount; no++ {
+		<-stopCh
+	}
 	usage := time.Now().Sub(start)
 	fmt.Printf("all tasks done in %s\n", usage.String())
 }
 
-func RunJobs(workerCount int, task func(group *sync.WaitGroup, no int), seeder func(group *sync.WaitGroup)) {
+func RunJobs(workerCount int, stopCh chan interface{}, task func(no int), seeder func()) {
 	jr := JobsRunner{WorkCount: workerCount, Task: task, Seeder: seeder}
-	jr.Run()
+	jr.Run(stopCh)
 }

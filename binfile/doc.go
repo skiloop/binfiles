@@ -108,17 +108,18 @@ func ReadKeySize(r io.Reader) (int32, error) {
 	return keySize, nil
 }
 
-type bzip2Reader struct {
-	reader io.Reader
-}
-
-func (bz *bzip2Reader) Close() error {
-	return nil
-}
-
-func (bz *bzip2Reader) Read(p []byte) (n int, err error) {
-	return bz.reader.Read(p)
-}
+//
+//type bzip2Reader struct {
+//	reader io.Reader
+//}
+//
+//func (bz *bzip2Reader) Close() error {
+//	return nil
+//}
+//
+//func (bz *bzip2Reader) Read(p []byte) (n int, err error) {
+//	return bz.reader.Read(p)
+//}
 
 func (doc *Doc) getDecompressReader() (reader io.ReadCloser, err error) {
 	switch doc.CompressType {

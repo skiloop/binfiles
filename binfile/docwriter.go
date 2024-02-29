@@ -14,7 +14,7 @@ import (
 	"sync"
 )
 
-const endFlag = ""
+const endFlag = "end"
 
 type docWriter struct {
 	binWriterFile
