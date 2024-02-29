@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"github.com/dsnet/compress/bzip2"
 	"io"
+	"os"
 )
 
 const (
@@ -22,6 +23,8 @@ const (
 
 var KeySizeLimit int32 = 1000
 var EmptyDocKey = "empty-doc."
+
+var ValueDecompressError = errors.New("value decompress error")
 
 var CompressTypes = map[string]int{
 	"gzip":   GZIP,
@@ -166,7 +169,8 @@ func ReadDoc(r io.Reader, compressType int, decompress bool) (*Doc, error) {
 		}
 		err = doc.Decompress()
 		if err != nil {
-			return nil, err
+			_, _ = fmt.Fprintf(os.Stderr, "decompress error: %v\n", err)
+			return nil, ValueDecompressError
 		}
 	}
 	return &doc, err

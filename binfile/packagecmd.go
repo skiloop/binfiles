@@ -1,6 +1,7 @@
 package binfile
 
 import (
+	"errors"
 	"fmt"
 	"github.com/skiloop/binfiles/workers"
 	"io"
@@ -49,6 +50,10 @@ func (r *repackager) seeder() {
 	for {
 		offset, _ := r.reader.Seek(0, 1)
 		doc, err := r.reader.next()
+		if errors.Is(err, ValueDecompressError) {
+			_, _ = fmt.Fprintf(os.Stderr, "doc read error at %d: %v\n", offset, err)
+			continue
+		}
 		if err != nil {
 			_, _ = fmt.Fprintf(os.Stderr, "doc read error at %d: %v\n", offset, err)
 			break
