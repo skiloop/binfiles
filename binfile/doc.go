@@ -2,11 +2,11 @@ package binfile
 
 import (
 	"bytes"
-	"compress/bzip2"
 	"compress/gzip"
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"github.com/dsnet/compress/bzip2"
 	"io"
 )
 
@@ -123,8 +123,7 @@ func (doc *Doc) getDecompressReader() (reader io.ReadCloser, err error) {
 	case GZIP:
 		return gzip.NewReader(bytes.NewReader(doc.CompressContent))
 	case BZIP2:
-		rc := bzip2Reader{bzip2.NewReader(bytes.NewBuffer(doc.CompressContent))}
-		return &rc, nil
+		return bzip2.NewReader(bytes.NewBuffer(doc.CompressContent), nil)
 	default:
 		return nil, ErrNotSupport
 	}
@@ -177,6 +176,11 @@ func (doc *Doc) writeDoc(w io.Writer) error {
 	switch doc.CompressType {
 	case NONE:
 		data = []byte(doc.Content)
+	case BZIP2:
+		buf := bytes.Buffer{}
+		writer, _ := bzip2.NewWriter(&buf, nil)
+		_, _ = writer.Write([]byte(doc.Content))
+		data = buf.Bytes()
 	case GZIP:
 		buf := bytes.Buffer{}
 		writer := gzip.NewWriter(&buf)
