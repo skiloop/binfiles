@@ -3,29 +3,35 @@ package binfile
 import (
 	"fmt"
 	"github.com/skiloop/binfiles/workers"
+	"io"
 	"os"
 	"sync"
 	"sync/atomic"
 )
 
+const end = "END"
+
 type RepackCmd struct {
 	Source              string `arg:"" help:"source bin file name"`
 	Target              string `arg:"" help:"target bin file name"`
 	Workers             int    `short:"w" help:"number of workers" default:"3"`
+	Merge               bool   `short:"m" help:"merge result into one when split > 0" default:"true"`
 	Split               int    `help:"split target into small parts if positive every specified number of docs, 0 means not to split" default:"0"`
 	TargetCompressType  string `short:"t" help:"compression type for docs in target file, none for no compression" enum:"gzip,bz2,none" default:"none"`
 	PackageCompressType string `short:"c" help:"compression type after whole target completed, none for no compression" enum:"gzip,bz2,none" default:"none"`
 }
 
 type repackager struct {
-	docCh   chan *Doc
-	reader  *docReader
-	target  string
-	pt      int
-	writer  *Packager
-	running bool
-	split   int
-	idx     atomic.Int32
+	docCh      chan *Doc
+	filenameCh chan string
+	reader     *docReader
+	target     string
+	pt         int
+	writer     *Packager
+	running    bool
+	merge      bool
+	split      int
+	idx        atomic.Int32
 }
 
 func (r *repackager) nextPackager() *Packager {
@@ -57,7 +63,49 @@ func (r *repackager) seeder(wg *sync.WaitGroup) {
 	r.docCh <- nil
 	fmt.Println("reader one")
 }
-
+func (r *repackager) merger(stopCh chan interface{}) {
+	wtr, err := os.OpenFile(r.target, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "fail to open file %s: %v\n", r.target, err)
+		return
+	}
+	defer func(wtr *os.File) {
+		_ = wtr.Close()
+	}(wtr)
+	var rdr *os.File
+	failed := false
+	for {
+		filename := <-r.filenameCh
+		if filename == end {
+			break
+		}
+		if failed {
+			continue
+		}
+		rdr, err = os.OpenFile(filename, os.O_RDONLY, 0644)
+		if err != nil {
+			_, _ = fmt.Fprintf(os.Stderr, "fail to open file %s: %v\n", filename, err)
+			failed = true
+			continue
+		}
+		fmt.Printf("merging %s\n", filename)
+		_, err = io.Copy(wtr, rdr)
+		_ = rdr.Close()
+		if err != nil {
+			_, _ = fmt.Fprintf(os.Stderr, "fail to append file %s: %v\n", filename, err)
+			failed = true
+			continue
+		}
+		_ = os.Remove(filename)
+	}
+	stopCh <- nil
+	fmt.Println("merger done")
+}
+func (r *repackager) notifyMerge(filename string) {
+	if r.merge {
+		r.filenameCh <- filename
+	}
+}
 func (r *repackager) worker(wg *sync.WaitGroup, no int) {
 	fmt.Printf("worker %d started\n", no)
 	wg.Add(1)
@@ -78,6 +126,7 @@ func (r *repackager) worker(wg *sync.WaitGroup, no int) {
 		doc := <-r.docCh
 		if doc == nil {
 			r.docCh <- doc
+			r.notifyMerge(writer.filename)
 			break
 		}
 		if Verbose {
@@ -92,8 +141,10 @@ func (r *repackager) worker(wg *sync.WaitGroup, no int) {
 			count += 1
 			if count%int64(r.split) == 0 {
 				writer.Close()
+				r.notifyMerge(writer.filename)
 				writer = r.nextPackager()
 				if writer == nil {
+					_, _ = fmt.Fprintf(os.Stderr, "[%d]failed to get next packager\n", no)
 					break
 				}
 			}
@@ -105,31 +156,46 @@ func (r *repackager) worker(wg *sync.WaitGroup, no int) {
 	fmt.Printf("worker %d done\n", no)
 }
 
-func (r *repackager) start(source, target, compressionType string, workerCount int, split int) error {
+func (r *repackager) start(source string, workerCount int) error {
 	r.reader = newDocReader(source, GZIP)
 	if err := r.reader.Open(); err != nil {
 		return err
 	}
 	defer r.reader.Close()
-	r.split = split
-	if split > 0 {
-		r.target = target
-	} else {
-		r.writer = newPackager(target, CompressTypes[compressionType])
+	var stopCh chan interface{}
+	if r.split <= 0 {
+		r.writer = newPackager(r.target, r.pt)
 		if err := r.writer.Open(); err != nil {
 			return err
 		}
 		defer r.writer.Close()
 	}
-
-	r.pt = CompressTypes[compressionType]
-	r.docCh = make(chan *Doc, workerCount+3)
+	if r.merge {
+		stopCh = make(chan interface{})
+		r.filenameCh = make(chan string, workerCount)
+		go r.merger(stopCh)
+	}
 	workers.RunJobs(workerCount, r.worker, r.seeder)
+	if r.merge {
+		r.filenameCh <- end
+		<-stopCh
+	}
 	return nil
 }
 
 // Repack bin file
 func Repack(opt RepackCmd) error {
-	r := repackager{}
-	return r.start(opt.Source, opt.Target, opt.PackageCompressType, opt.Workers, opt.Split)
+	r := repackager{
+		docCh:      make(chan *Doc, opt.Workers+3),
+		filenameCh: nil,
+		reader:     nil,
+		target:     opt.Target,
+		pt:         CompressTypes[opt.PackageCompressType],
+		writer:     nil,
+		running:    false,
+		merge:      opt.Merge && opt.Split > 1,
+		split:      opt.Split,
+		idx:        atomic.Int32{},
+	}
+	return r.start(opt.Source, opt.Workers)
 }
