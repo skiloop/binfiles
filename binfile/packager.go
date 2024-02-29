@@ -5,6 +5,7 @@ import (
 	"github.com/andybalholm/brotli"
 	"github.com/dsnet/compress/bzip2"
 	"github.com/pierrec/lz4"
+	"github.com/ulikunitz/xz"
 	"io"
 	"os"
 )
@@ -31,6 +32,8 @@ func getCompressCloser(compressType int, fn *os.File) (io.WriteCloser, error) {
 		return lz4.NewWriter(fn), nil
 	case BROTLI:
 		return brotli.NewWriter(fn), nil
+	case XZ:
+		return xz.NewWriter(fn)
 	case GZIP:
 		fallthrough
 	default:

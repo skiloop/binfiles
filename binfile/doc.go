@@ -17,6 +17,7 @@ const (
 	BZIP2
 	BROTLI
 	LZ4
+	XZ
 )
 
 var KeySizeLimit int32 = 1000
@@ -29,6 +30,7 @@ var CompressTypes = map[string]int{
 	"bzip2":  BZIP2,
 	"bz2":    BZIP2,
 	"br":     BROTLI,
+	"xz":     XZ,
 	"brotli": BROTLI,
 	"lz4":    LZ4,
 }
