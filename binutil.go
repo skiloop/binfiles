@@ -45,7 +45,7 @@ type SeekCmd struct {
 type PackageCmd struct {
 	Output            string `arg:"" help:"output bin file path"`
 	Path              string `arg:"" help:"input path where source files are"`
-	InputCompressType string `short:"c" help:"input file compression type" enum:"gzip,bz2,none" default:"none"`
+	InputCompressType string `short:"c" help:"input file compression type" enum:"gzip,bz2,br,brotli,lz4,none" default:"none"`
 	Pattern           string `short:"p" help:"source file pattern, the matched will be packaged, all files package if empty" default:""`
 	WorkerCount       int    `short:"w" help:"number of workers, when 0 or negative number of system processors will be used" default:"0"`
 }
