@@ -10,7 +10,7 @@ package binfile
 //}
 //offset, _ := target.Seek(0, 2)
 //for _, file := range files {
-//	src, err := os.OpenFile(file, os.O_RDONLY, 0)
+//	src, err := os.OpenFile(file, os.O_RDONLY, 0644)
 //	if err != nil {
 //		_, _ = fmt.Fprintf(os.Stderr, "read file %s error: %v\n", file, err)
 //		continue

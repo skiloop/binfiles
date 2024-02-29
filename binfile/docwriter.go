@@ -28,7 +28,7 @@ func (dw *docWriter) checkAndOpen() error {
 	if dw.file != nil {
 		return nil
 	}
-	fn, err := os.OpenFile(dw.filename, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0x644)
+	fn, err := os.OpenFile(dw.filename, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0644)
 	if err != nil {
 		return err
 	}

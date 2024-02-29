@@ -30,7 +30,7 @@ func main() {
 	}
 	_ = w.Close()
 
-	r, err := os.OpenFile(cli.binFile, os.O_RDONLY, 0)
+	r, err := os.OpenFile(cli.binFile, os.O_RDONLY, 0644)
 	if err != nil {
 		fmt.Println(err.Error())
 		return

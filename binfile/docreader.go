@@ -151,7 +151,7 @@ func conCount(ch chan int64, fn string, start, end int64, ct, no int, verboseSte
 func simpleCount(fs *os.File, start, end int64, no int, verboseStep uint32) (count int64) {
 	count = 0
 	curPos, err := fs.Seek(start, 0)
-	fmt.Printf("count fd: %d\n", fs.Fd())
+	//fmt.Printf("count fd: %d\n", fs.Fd())
 	if err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "\n[%d]read doc error at %d\n%v", no, curPos, err)
 		return -1
