@@ -1,9 +1,9 @@
 package binfile
 
 import (
+	"compress/gzip"
 	"github.com/andybalholm/brotli"
 	"github.com/dsnet/compress/bzip2"
-	"github.com/klauspost/compress/gzip"
 	"github.com/pierrec/lz4"
 	"github.com/ulikunitz/xz"
 	"io"
@@ -46,7 +46,7 @@ func getDecompressReader(ct int, src io.Reader) (reader io.Reader, err error) {
 	case BROTLI:
 		return brotli.NewReader(src), nil
 	case XZ:
-		return xz.NewReader(src), nil
+		return xz.NewReader(src)
 	case BZIP2:
 		return bzip2.NewReader(src, nil)
 	case GZIP:
