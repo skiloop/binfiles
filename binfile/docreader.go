@@ -31,11 +31,11 @@ func (dr *docReader) openAt(offset int64) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	pos, err := dr.Seek(offset, 0)
+	pos, err := dr.Seek(offset, io.SeekStart)
 	if err != nil {
 		return pos, err
 	}
-	return 0, nil
+	return pos, nil
 }
 
 // ReadAt read doc at specified position
@@ -43,7 +43,7 @@ func (dr *docReader) ReadAt(offset int64, decompress bool) (doc *Doc, err error)
 	if _, err = dr.openAt(offset); err != nil {
 		return nil, err
 	}
-	//pos, err := dr.Seek(0, 1)
+	//pos, err := dr.Seek(0, io.SeekCurrent)
 	//fmt.Printf("offset: %20d, current: %20d\n", offset, pos)
 	return ReadDoc(dr.file, dr.compressType, decompress)
 }
@@ -216,12 +216,12 @@ func (dr *docReader) ReadKey() (doc *DocKey, err error) {
 		return nil, err
 	}
 	doc.ContentSize = valueSize
-	_, _ = dr.Seek(int64(valueSize), 1)
+	_, _ = dr.Seek(int64(valueSize), io.SeekCurrent)
 	return doc, nil
 }
 
 func (dr *docReader) resetOffset(offset int64) {
-	_, _ = dr.Seek(offset, 0)
+	_, _ = dr.Seek(offset, io.SeekStart)
 }
 
 // List documents in bin file
@@ -239,7 +239,7 @@ func (dr *docReader) List(opt *ReadOption, keyOnly bool) {
 		if err == io.EOF || doc == nil {
 			break
 		}
-		curPos, _ := dr.Seek(0, 1)
+		curPos, _ := dr.Seek(0, io.SeekCurrent)
 		count++
 		if err != nil {
 			_, _ = fmt.Fprintf(os.Stderr, "[!%d]\t%20d\t%v\n", count, docPos, err)
@@ -284,7 +284,7 @@ func (dr *docReader) Search(opt SearchOption) int64 {
 		fmt.Printf("skip: %d\n", skip)
 	}
 	for {
-		docPos, _ = dr.Seek(0, 1)
+		docPos, _ = dr.Seek(0, io.SeekCurrent)
 		doc, err = dr.ReadKey()
 		if err == io.EOF || doc == nil {
 			break
@@ -305,13 +305,13 @@ func (dr *docReader) Search(opt SearchOption) int64 {
 func skipOne(fs *os.File) (err error) {
 	var offset int64
 	var size int32
-	offset, err = fs.Seek(0, 1)
+	offset, err = fs.Seek(0, io.SeekCurrent)
 	if err != nil {
 		return err
 	}
 	defer func() {
 		if err != nil {
-			_, _ = fs.Seek(offset, 0)
+			_, _ = fs.Seek(offset, io.SeekStart)
 		}
 	}()
 	// read key size
@@ -321,7 +321,7 @@ func skipOne(fs *os.File) (err error) {
 		return err
 	}
 	// skip to value size
-	_, err = fs.Seek(int64(size), 1)
+	_, err = fs.Seek(int64(size), io.SeekCurrent)
 	if err != nil {
 		if err == io.EOF {
 			err = InvalidDocumentFound
