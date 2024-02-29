@@ -1,7 +1,6 @@
 package binfile
 
 import (
-	"compress/gzip"
 	"errors"
 	"fmt"
 	"github.com/skiloop/binfiles/binfile/filelock"
@@ -28,7 +27,7 @@ func (dw *docWriter) checkAndOpen() error {
 	if dw.file != nil {
 		return nil
 	}
-	fn, err := os.OpenFile(dw.filename, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0644)
+	fn, err := os.OpenFile(dw.filename, writerFileFlag, 0644)
 	if err != nil {
 		return err
 	}
@@ -160,18 +159,9 @@ func readContent(path string, compress int) []byte {
 	defer func() {
 		_ = in.Close()
 	}()
-	var reader io.Reader
-	switch compress {
-	case GZIP:
-		reader, err = gzip.NewReader(in)
-	case NONE:
-		reader = in
-	default:
-		_, _ = fmt.Fprintf(os.Stderr, "unsupported compression type: %d\n", compress)
-		return nil
-	}
+	reader, err := getDecompressReader(compress, in)
 	if err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "decompress error: %v\n", err)
+		_, _ = fmt.Fprintf(os.Stderr, "decompress reader error: %v\n", err)
 		return nil
 	}
 	var data []byte
@@ -199,7 +189,7 @@ func (dw *docWriter) writeFile(path string, compress int) error {
 func (dw *docWriter) Write(doc *Doc) error {
 	var err error
 	if err = dw.lock(); err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "mu file error: %v\n", err)
+		_, _ = fmt.Fprintf(os.Stderr, "lock file error: %v\n", err)
 		return err
 	}
 	defer func() {
@@ -213,4 +203,12 @@ func (dw *docWriter) Write(doc *Doc) error {
 		return err
 	}
 	return nil
+}
+
+func (dw *docWriter) open() (err error) {
+	if Debug {
+		fmt.Printf("opening file %s for writing\n", dw.filename)
+	}
+	dw.file, err = os.OpenFile(dw.filename, writerFileFlag, 0644)
+	return err
 }

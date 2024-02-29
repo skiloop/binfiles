@@ -26,7 +26,7 @@ func (dr *binWriterFile) Open() error {
 	if dr.file != nil {
 		return nil
 	}
-	fn, err := os.OpenFile(dr.filename, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	fn, err := os.OpenFile(dr.filename, writerFileFlag, 0644)
 	if err != nil {
 		return err
 	}

@@ -56,6 +56,44 @@ func getDecompressReader(ct int, src io.Reader) (reader io.Reader, err error) {
 	}
 }
 
+type brotliWriter struct {
+	dst *brotli.Writer
+}
+
+func (bw *brotliWriter) Write(p []byte) (int, error) {
+	defer func(dst *brotli.Writer) {
+		_ = dst.Flush()
+	}(bw.dst)
+	return bw.dst.Write(p)
+}
+
+func (bw *brotliWriter) Close() error {
+	return bw.dst.Close()
+}
+
+func newBrotliWriter(w io.Writer) *brotliWriter {
+	return &brotliWriter{dst: brotli.NewWriter(w)}
+}
+
+type lz4Writer struct {
+	dst *lz4.Writer
+}
+
+func (bw *lz4Writer) Write(p []byte) (int, error) {
+	defer func(dst *lz4.Writer) {
+		_ = dst.Flush()
+	}(bw.dst)
+	return bw.dst.Write(p)
+}
+
+func (bw *lz4Writer) Close() error {
+	return bw.dst.Close()
+}
+
+func newLz4Writer(w io.Writer) *lz4Writer {
+	return &lz4Writer{dst: lz4.NewWriter(w)}
+}
+
 func getCompressCloser(compressType int, w io.Writer) (io.WriteCloser, error) {
 	switch compressType {
 	case NONE:
@@ -63,9 +101,9 @@ func getCompressCloser(compressType int, w io.Writer) (io.WriteCloser, error) {
 	case BZIP2:
 		return bzip2.NewWriter(w, nil)
 	case LZ4:
-		return lz4.NewWriter(w), nil
+		return newLz4Writer(w), nil
 	case BROTLI:
-		return brotli.NewWriter(w), nil
+		return newBrotliWriter(w), nil
 	case XZ:
 		return xz.NewWriter(w)
 	case GZIP:

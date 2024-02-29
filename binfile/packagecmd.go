@@ -69,7 +69,7 @@ func (r *repackager) seeder() {
 }
 
 func (r *repackager) merger(stopCh chan interface{}) {
-	wtr, err := os.OpenFile(r.target, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	wtr, err := os.OpenFile(r.target, writerFileFlag, 0644)
 	if err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "fail to open file %s: %v\n", r.target, err)
 		return
