@@ -100,7 +100,7 @@ func (dr *docReader) Count(offset int64, nThreads int, verboseStep uint32) int64
 		return -1
 	}
 
-	if offset >= readSize {
+	if offset > readSize {
 		return 0
 	}
 
