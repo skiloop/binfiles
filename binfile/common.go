@@ -56,42 +56,28 @@ func getDecompressReader(ct int, src io.Reader) (reader io.Reader, err error) {
 	}
 }
 
-type brotliWriter struct {
-	dst *brotli.Writer
+type Flusher interface {
+	Flush() error
+	io.WriteCloser
 }
 
-func (bw *brotliWriter) Write(p []byte) (int, error) {
-	defer func(dst *brotli.Writer) {
-		_ = dst.Flush()
+type flushWriter struct {
+	dst Flusher
+}
+
+func (bw *flushWriter) Write(p []byte) (int, error) {
+	defer func(w Flusher) {
+		_ = w.Flush()
 	}(bw.dst)
 	return bw.dst.Write(p)
 }
 
-func (bw *brotliWriter) Close() error {
+func (bw *flushWriter) Close() error {
 	return bw.dst.Close()
 }
 
-func newBrotliWriter(w io.Writer) *brotliWriter {
-	return &brotliWriter{dst: brotli.NewWriter(w)}
-}
-
-type lz4Writer struct {
-	dst *lz4.Writer
-}
-
-func (bw *lz4Writer) Write(p []byte) (int, error) {
-	defer func(dst *lz4.Writer) {
-		_ = dst.Flush()
-	}(bw.dst)
-	return bw.dst.Write(p)
-}
-
-func (bw *lz4Writer) Close() error {
-	return bw.dst.Close()
-}
-
-func newLz4Writer(w io.Writer) *lz4Writer {
-	return &lz4Writer{dst: lz4.NewWriter(w)}
+func newFlushWriter(w Flusher) *flushWriter {
+	return &flushWriter{dst: w}
 }
 
 func getCompressCloser(compressType int, w io.Writer) (io.WriteCloser, error) {
@@ -101,14 +87,15 @@ func getCompressCloser(compressType int, w io.Writer) (io.WriteCloser, error) {
 	case BZIP2:
 		return bzip2.NewWriter(w, nil)
 	case LZ4:
-		return newLz4Writer(w), nil
+		return lz4.NewWriter(w), nil
 	case BROTLI:
-		return newBrotliWriter(w), nil
+		return brotli.NewWriter(w), nil
 	case XZ:
 		return xz.NewWriter(w)
 	case GZIP:
 		fallthrough
 	default:
+		//return newFlushWriter(gzip.NewWriter(w)), nil
 		return gzip.NewWriter(w), nil
 	}
 	//return nil, errors.New(fmt.Sprintf("unknown package compression type %d", compressType))

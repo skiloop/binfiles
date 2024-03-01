@@ -12,7 +12,7 @@ import (
 var (
 	ErrValueDecompress = errors.New("value decompress error")
 	ErrReadKey         = errors.New("key read error")
-	ErrNotSupport      = errors.New("not support for this compression type")
+	//ErrNotSupport      = errors.New("not support for this compression type")
 )
 
 type Doc struct {
@@ -149,6 +149,11 @@ func (doc *Doc) writeDoc(w io.Writer) error {
 		if err != nil {
 			return err
 		}
+		_ = writer.Close()
+		//err = flush(writer)
+		//if err != nil {
+		//	return err
+		//}
 		data = buf.Bytes()
 	}
 
