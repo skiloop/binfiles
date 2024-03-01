@@ -25,6 +25,8 @@ const (
 var KeySizeLimit int32 = 1000
 var EmptyDocKey = "empty-doc."
 
+const workerEndFlag = "" // task worker end flag
+
 var CompressTypes = map[string]int{
 	"gzip":   GZIP,
 	"none":   NONE,

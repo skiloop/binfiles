@@ -9,8 +9,6 @@ import (
 	"sync/atomic"
 )
 
-const end = "END"
-
 type RepackCmd struct {
 	Source              string `arg:"" help:"source bin file name"`
 	Target              string `arg:"" help:"target bin file name"`
@@ -22,23 +20,22 @@ type RepackCmd struct {
 }
 
 type repackager struct {
-	docCh        chan *Doc
-	filenameCh   chan string
-	workerStopCh chan interface{}
-	reader       *docReader
-	target       string
-	pt           int
-	writer       *Packager
-	running      bool
-	merge        bool
-	split        int
-	idx          atomic.Int32
+	docCh      chan *Doc
+	filenameCh chan string
+	stopSeeder chan interface{}
+	reader     *docReader
+	target     string
+	pt         int
+	writer     *Repackager
+	running    bool
+	split      int
+	idx        atomic.Int32
 }
 
-func (r *repackager) nextPackager() *Packager {
+func (r *repackager) nextPackager() *Repackager {
 	no := r.idx.Add(1)
 	filename := fmt.Sprintf("%s.%d", r.target, no)
-	writer := newPackager(filename, r.pt)
+	writer := newRepackager(filename, r.pt)
 	if err := writer.Open(); err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "failed to open %s\n", filename)
 		return nil
@@ -62,7 +59,11 @@ func (r *repackager) seeder() {
 		if doc == nil {
 			break
 		}
-		r.docCh <- doc
+		select {
+		case r.docCh <- doc:
+		case <-r.stopSeeder:
+			break
+		}
 	}
 	r.docCh <- nil
 	fmt.Println("reader done")
@@ -81,7 +82,7 @@ func (r *repackager) merger(stopCh chan interface{}) {
 	failed := false
 	for {
 		filename := <-r.filenameCh
-		if filename == end {
+		if filename == workerEndFlag {
 			break
 		}
 		if failed {
@@ -108,7 +109,7 @@ func (r *repackager) merger(stopCh chan interface{}) {
 }
 
 func (r *repackager) notifyMerge(filename string) {
-	if r.merge {
+	if r.filenameCh != nil {
 		r.filenameCh <- filename
 	}
 }
@@ -116,7 +117,7 @@ func (r *repackager) notifyMerge(filename string) {
 func (r *repackager) worker(no int) {
 	fmt.Printf("worker %d started\n", no)
 	var err error
-	var writer *Packager
+	var writer *Repackager
 	if r.writer != nil {
 		writer = r.writer
 	} else {
@@ -158,7 +159,6 @@ func (r *repackager) worker(no int) {
 	if r.writer == nil {
 		writer.Close()
 	}
-	r.workerStopCh <- nil
 	fmt.Printf("worker %d done\n", no)
 }
 
@@ -168,23 +168,22 @@ func (r *repackager) start(source string, workerCount int) error {
 		return err
 	}
 	defer r.reader.Close()
-	var stopCh chan interface{}
+	var waitMergerCh chan interface{} = nil
 	if r.split <= 0 && workerCount == 1 {
-		r.writer = newPackager(r.target, r.pt)
+		r.writer = newRepackager(r.target, r.pt)
 		if err := r.writer.Open(); err != nil {
 			return err
 		}
 		defer r.writer.Close()
 	}
-	if r.merge {
-		stopCh = make(chan interface{})
-		r.filenameCh = make(chan string, workerCount)
-		go r.merger(stopCh)
+	if r.filenameCh != nil {
+		waitMergerCh = make(chan interface{})
+		go r.merger(waitMergerCh)
 	}
-	workers.RunJobs(workerCount, r.workerStopCh, false, r.worker, r.seeder)
-	if r.merge {
-		r.filenameCh <- end
-		<-stopCh
+	workers.RunJobs(workerCount, r.stopSeeder, r.worker, r.seeder)
+	if r.filenameCh != nil {
+		r.filenameCh <- workerEndFlag
+		<-waitMergerCh
 	}
 	return nil
 }
@@ -192,17 +191,19 @@ func (r *repackager) start(source string, workerCount int) error {
 // Repack bin file
 func Repack(opt RepackCmd) error {
 	r := repackager{
-		docCh:        make(chan *Doc, opt.Workers+3),
-		filenameCh:   nil,
-		workerStopCh: make(chan interface{}),
-		reader:       nil,
-		target:       opt.Target,
-		pt:           CompressTypes[opt.PackageCompressType],
-		writer:       nil,
-		running:      false,
-		merge:        opt.Merge && (opt.Split > 1 || opt.Workers > 1),
-		split:        opt.Split,
-		idx:          atomic.Int32{},
+		docCh:      make(chan *Doc, opt.Workers+3),
+		filenameCh: nil,
+		stopSeeder: make(chan interface{}),
+		reader:     nil,
+		target:     opt.Target,
+		pt:         CompressTypes[opt.PackageCompressType],
+		writer:     nil,
+		running:    false,
+		split:      opt.Split,
+		idx:        atomic.Int32{},
+	}
+	if opt.Merge && (opt.Split > 1 || opt.Workers > 1) {
+		r.filenameCh = make(chan string, opt.Workers)
 	}
 	return r.start(opt.Source, opt.Workers)
 }

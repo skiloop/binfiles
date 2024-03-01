@@ -1,11 +1,11 @@
 package binfile
 
-type Packager struct {
+type Repackager struct {
 	docWriter
 	packageCompression int
 }
 
-func (p *Packager) Open() error {
+func (p *Repackager) Open() error {
 	err := p.docWriter.Open()
 	if err != nil {
 		return err
@@ -14,8 +14,8 @@ func (p *Packager) Open() error {
 	return err
 }
 
-func newPackager(filename string, packageCompressType int) *Packager {
-	return &Packager{
+func newRepackager(filename string, packageCompressType int) *Repackager {
+	return &Repackager{
 		docWriter: docWriter{
 			binWriterFile: binWriterFile{
 				binFile: binFile{filename: filename, compressType: NONE},

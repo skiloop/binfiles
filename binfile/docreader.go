@@ -161,7 +161,7 @@ func simpleCount(fs *os.File, start, end int64, no int, verboseStep uint32) (cou
 		if end != -1 {
 			fmt.Printf("[%d] count how many documents from position %d to %d\n", no, start, end)
 		} else {
-			fmt.Printf("[%d] count how many documents from position %d to end\n", no, start)
+			fmt.Printf("[%d] count how many documents from position %d to workerEndFlag\n", no, start)
 		}
 	}
 	for {

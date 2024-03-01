@@ -12,9 +12,8 @@ type PackageOption struct {
 type BinWriter interface {
 	// Close writer
 	Close()
-
-	// Package files to bin file
-	Package(option *PackageOption) error
+	Open() error
+	Write(doc *Doc) error
 }
 
 func NewBinWriter(filename string, compressType int) BinWriter {

@@ -186,7 +186,7 @@ func packageDocs(bw binfile.BinWriter) {
 	if opt.WorkerCount <= 0 {
 		opt.WorkerCount = runtime.NumCPU()
 	}
-	err := bw.Package(opt)
+	err := binfile.Package(opt, bw)
 	if err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "package error: %v\n", err)
 	}
