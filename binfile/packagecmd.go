@@ -181,7 +181,7 @@ func (r *repackager) start(source string, workerCount int) error {
 		r.filenameCh = make(chan string, workerCount)
 		go r.merger(stopCh)
 	}
-	workers.RunJobs(workerCount, r.workerStopCh, r.worker, r.seeder)
+	workers.RunJobs(workerCount, r.workerStopCh, false, r.worker, r.seeder)
 	if r.merge {
 		r.filenameCh <- end
 		<-stopCh
