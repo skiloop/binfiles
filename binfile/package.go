@@ -59,11 +59,11 @@ func searchFiles(path string, ch, stop chan interface{}, pattern *regexp.Regexp)
 			return nil
 		case <-stop:
 			// stop walking when workers stopped
-			return workersStopped
+			return errWorkersStopped
 		}
 	})
 	ch <- nil
-	if err != nil && !errors.Is(err, workersStopped) {
+	if err != nil && !errors.Is(err, errWorkersStopped) {
 		_, _ = fmt.Fprintf(os.Stderr, "search path error: %v\n", err)
 	}
 	fmt.Println("path search done")
@@ -98,8 +98,8 @@ func readDoc(path string, compress int) (*Doc, error) {
 		return nil, err
 	}
 	doc := &Doc{}
-	doc.Key = parts[len(parts)-1]
-	doc.Content = string(content)
+	doc.Key = []byte(parts[len(parts)-1])
+	doc.Content = content
 	return doc, nil
 }
 
@@ -127,7 +127,7 @@ func packageWorker(ch chan interface{}, compress, no int, dw BinWriter) {
 			_, _ = fmt.Fprintf(os.Stderr, "[%d] read file %s error: %v\n", no, path, err)
 			continue
 		}
-		if err := dw.Write(doc); err != nil {
+		if _, err := dw.Write(doc); err != nil {
 			_, _ = fmt.Fprintf(os.Stderr, "[%d] worker error: %v\n", no, err)
 			break
 		}

@@ -13,7 +13,7 @@ type packageHeader struct {
 //}
 
 type DocPackageWriter struct {
-	docWriter
+	binWriter
 	header *packageHeader
 }
 

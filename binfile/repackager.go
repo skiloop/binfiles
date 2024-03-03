@@ -1,26 +1,40 @@
 package binfile
 
+import (
+	"fmt"
+	"os"
+)
+
 type Repackager struct {
-	docWriter
+	filename           string
+	writer             DocWriter
 	packageCompression int
+	file               *os.File
 }
 
-func (p *Repackager) Open() error {
-	err := p.docWriter.Open()
-	if err != nil {
-		return err
+func (r *Repackager) Close() error {
+	if r.file != nil {
+		return r.file.Close()
 	}
-	p.file, err = getCompressCloser(p.packageCompression, p.fn)
-	return err
+	return nil
 }
 
 func newRepackager(filename string, packageCompressType int) *Repackager {
+	file, err := os.OpenFile(filename, writerFileFlag, 0644)
+	if err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "Error opening %s: %v\n", filename, err)
+		return nil
+	}
+	compressor, err := getCompressCloser(packageCompressType, file)
+	if err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "%v\n", err)
+		_ = file.Close()
+		return nil
+	}
 	return &Repackager{
-		docWriter: docWriter{
-			binWriterFile: binWriterFile{
-				binFile: binFile{filename: filename, compressType: NONE},
-			},
-		},
+		filename:           filename,
+		writer:             NewDocWriter(compressor),
 		packageCompression: packageCompressType,
+		file:               file,
 	}
 }

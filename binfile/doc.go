@@ -4,9 +4,8 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"io"
-	"os"
+	"unsafe"
 )
 
 var (
@@ -16,50 +15,37 @@ var (
 )
 
 type Doc struct {
-	Key             string
-	Content         string
-	CompressContent []byte
-	CompressType    int
+	Key     []byte
+	Content []byte
 }
 
 type DocKey struct {
 	KeySize     int32
 	ContentSize int32
-	Key         string
+	Key         []byte
 }
 
-func (doc *Doc) read(r io.Reader) error {
-	keySize, err := ReadKeySize(r)
+type Node struct {
+	Size int32
+	Data []byte
+}
+
+func ReadDoc(r io.Reader, doc *Doc) (int, error) {
+	dc := &DocKey{}
+	nr, err := readHeader(r, dc)
 	if err != nil {
-		return err
-	}
-	if keySize <= 0 || keySize > KeySizeLimit {
-		return InvalidDocumentFound
-	}
-	var keyBuf []byte
-	if Debug {
-		fmt.Printf("read %d bytes for key\n", keySize)
-	}
-	keyBuf, err = readBytes(r, int(keySize))
-	if err != nil {
-		return err
-	}
-	doc.Key = string(keyBuf)
-	valueSize, err := ReadKeySize(r)
-	if err != nil {
-		return err
-	}
-	if valueSize < 0 {
-		return nil
+		return nr, err
 	}
 
-	valueBuf := make([]byte, valueSize)
-	_, err = r.Read(valueBuf)
+	doc.Content = make([]byte, dc.ContentSize)
+	var n int
+	n, err = r.Read(doc.Content)
+	nr += n
 	if err != nil {
-		return err
+		return nr, err
 	}
-	doc.CompressContent = valueBuf
-	return nil
+	doc.Key = dc.Key
+	return nr, nil
 }
 
 func readBytes(r io.Reader, size int) ([]byte, error) {
@@ -74,103 +60,101 @@ func readBytes(r io.Reader, size int) ([]byte, error) {
 	return keyBuf, nil
 }
 
-func ReadKeySize(r io.Reader) (int32, error) {
-	var keySize int32
-	err := binary.Read(r, binary.LittleEndian, &keySize)
+func readInt32(r io.Reader, num *int32) (int, error) {
+	err := binary.Read(r, binary.LittleEndian, num)
 	if err != nil {
 		return 0, err
 	}
-	return keySize, nil
+	return int(unsafe.Sizeof(*num)), nil
 }
 
-//
-//type bzip2Reader struct {
-//	reader io.Reader
-//}
-//
-//func (bz *bzip2Reader) Close() error {
-//	return nil
-//}
-//
-//func (bz *bzip2Reader) Read(p []byte) (n int, err error) {
-//	return bz.reader.Read(p)
-//}
-
-func (doc *Doc) Decompress() error {
-	if NONE == doc.CompressType {
-		doc.Content = string(doc.CompressContent)
-	} else {
-
-		reader, err := getDecompressReader(doc.CompressType, bytes.NewReader(doc.CompressContent))
-		if err != nil {
-			return err
-		}
-		var data []byte
-		data, err = io.ReadAll(reader)
-		if err != nil {
-			return err
-		}
-		doc.Content = string(data)
+func Decompress(doc *Doc, compressType int) (dst *Doc, err error) {
+	if NONE == compressType {
+		return doc, nil
 	}
-
-	return nil
-}
-
-func ReadDoc(r io.Reader, compressType int, decompress bool) (*Doc, error) {
-	doc := Doc{CompressType: compressType}
-	err := doc.read(r)
+	reader, err := getDecompressReader(compressType, bytes.NewReader(doc.Content))
 	if err != nil {
 		return nil, err
 	}
-	if decompress {
-		if doc.Key == EmptyDocKey {
-			doc.Content = EmptyDocKey
-			return &doc, nil
-		}
-		err = doc.Decompress()
-		if err != nil {
-			_, _ = fmt.Fprintf(os.Stderr, "decompress error: %v\n", err)
-			return nil, ErrValueDecompress
-		}
+
+	var data []byte
+	data, err = io.ReadAll(reader)
+	if err != nil {
+		return nil, err
 	}
-	return &doc, err
+	return &Doc{Key: bytes.Clone(doc.Key), Content: data}, nil
+}
+
+func Compress(doc *Doc, compressType int) (dst *Doc, err error) {
+	if NONE == compressType {
+		return doc, nil
+	}
+	buf := bytes.Buffer{}
+	writer, err := getCompressCloser(compressType, &buf)
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = writer.Write(doc.Content)
+	if err != nil {
+		return nil, err
+	}
+	if err = writer.Close(); err != nil {
+		return nil, err
+	}
+	return &Doc{Key: bytes.Clone(doc.Key), Content: buf.Bytes()}, nil
 }
 
 // writeDoc Write document to writer
-func (doc *Doc) writeDoc(w io.Writer) error {
-	var data []byte
+func (doc *Doc) writeDoc(w io.Writer) (int, error) {
 	var err error
-	if doc.CompressType == NONE {
-		data = []byte(doc.Content)
-	} else {
-		buf := bytes.Buffer{}
-		writer, _ := getCompressCloser(doc.CompressType, &buf)
-		_, err = writer.Write([]byte(doc.Content))
-		if err != nil {
-			return err
-		}
-		_ = writer.Close()
-		//err = flush(writer)
-		//if err != nil {
-		//	return err
-		//}
-		data = buf.Bytes()
-	}
-
-	key := []byte(doc.Key)
-	err = writeNode(w, key)
+	var n, nb int
+	n, err = writeNode(w, doc.Key)
 	if err != nil {
-		return err
+		return n, err
 	}
-	return writeNode(w, data)
+	nb, err = writeNode(w, doc.Content)
+	return n + nb, err
 }
 
-func writeNode(w io.Writer, data []byte) (err error) {
+func writeNode(w io.Writer, data []byte) (n int, err error) {
 	keySize := int32(len(data))
-	err = binary.Write(w, binary.LittleEndian, &keySize)
+	err = binary.Write(w, binary.LittleEndian, keySize)
 	if err != nil {
-		return err
+		return 0, err
 	}
-	_, err = w.Write(data)
-	return err
+	n, err = w.Write(data)
+	return n + int(keySize), err
+}
+
+func readNode(reader io.Reader, node *Node) (nr int, err error) {
+	nr, err = readInt32(reader, &node.Size)
+	if err != nil {
+		return nr, err
+	}
+	if node.Size < 0 {
+		return nr, ErrReadKey
+	}
+	node.Data = make([]byte, node.Size)
+	var n int
+	n, err = reader.Read(node.Data)
+	if err == io.EOF && int32(n) < node.Size {
+		return nr + n, InvalidDocumentFound
+	}
+	nr += n
+	return nr, err
+}
+
+func readHeader(reader io.Reader, doc *DocKey) (int, error) {
+	node := &Node{}
+	nr, err := readNode(reader, node)
+	if err != nil {
+		return nr, err
+	}
+
+	n, err := readInt32(reader, &doc.ContentSize)
+	nr += n
+	doc.Key = node.Data
+	doc.KeySize = node.Size
+	return nr, err
 }

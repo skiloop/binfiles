@@ -74,7 +74,12 @@ func newReader(filename string, compress string) binfile.BinReader {
 		_, _ = fmt.Fprintf(os.Stderr, "unknown compression type %s\n", client.CompressType)
 		return nil
 	}
-	return binfile.NewBinReader(filename, ct)
+	r, err := binfile.NewBinReader(filename, ct)
+	if err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "fail to init bin reader: %v\n", err)
+		return nil
+	}
+	return r
 }
 
 func newWriter(filename string, compress string) binfile.BinWriter {
@@ -140,7 +145,7 @@ func searchDocs(br binfile.BinReader) {
 		_, _ = fmt.Fprintf(os.Stderr, "document with key %s not found", client.Search.Key)
 		return
 	}
-	doc, err := br.ReadAt(pos, true)
+	doc, err := br.Read(pos, true)
 	if err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "document found at %d but read error: %v\n", pos, err)
 		return
