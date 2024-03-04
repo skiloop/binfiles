@@ -73,34 +73,31 @@ func (r *repackager) seeder() {
 	r.docCh <- nil
 	fmt.Println("reader done")
 }
-
+func closeWriter(closer io.Closer, msg string) {
+	err := closer.Close()
+	if err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "%s close error: %v\n", msg, err)
+	}
+}
 func (r *repackager) merge(stopCh chan interface{}) {
+
 	wtr, err := os.OpenFile(r.target, writerFileFlag, 0644)
 	if err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "fail to open file %s: %v\n", r.target, err)
 		return
 	}
-	defer func(wtr *os.File) {
-		err := wtr.Close()
-		if err != nil {
-			_, _ = fmt.Fprintf(os.Stderr, "fail to close file %s: %v\n", r.target, err)
-			return
-		}
-		fmt.Print("file closed successfully")
-	}(wtr)
+	defer closeWriter(wtr, r.target)
 
 	wc, err := getCompressCloser(r.pt, wtr)
 	if err != nil {
 		return
 	}
-	defer func(wc io.WriteCloser) {
-		err := wc.Close()
-		if err != nil {
-			_, _ = fmt.Fprintf(os.Stderr, "fail to close compressor: %v\n", err)
-			return
+	defer closeWriter(wc, "compressor")
+	defer func() {
+		if err := recover(); err != nil {
+			_, _ = fmt.Fprintf(os.Stderr, "merger recover: %v\n", err)
 		}
-		fmt.Print("compressor closed successfully")
-	}(wc)
+	}()
 	var rdr *os.File
 	failed := false
 	var nw int64
