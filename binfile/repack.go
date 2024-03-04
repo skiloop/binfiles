@@ -161,8 +161,8 @@ func (r *repackager) worker(no int) {
 			}
 		}
 	}
-	if r.writer == nil {
-		rp.Close()
+	if r.writer == nil && rp != nil {
+		_ = rp.Close()
 	}
 	fmt.Printf("worker %d done\n", no)
 }
@@ -174,15 +174,15 @@ func (r *repackager) start(source string, workerCount int) error {
 		return err
 	}
 	r.reader = NewSeeker(fn, GZIP)
-	defer func(reader io.Closer) {
-		_ = reader.Close()
+	defer func(r io.Closer) {
+		_ = r.Close()
 	}(r.reader)
 	var waitMergerCh chan interface{} = nil
 	if r.split <= 0 && workerCount == 1 {
 		r.writer = newRepackager(r.target, r.pt)
 
-		defer func(writer *Repackager) {
-			_ = writer.Close()
+		defer func(w *Repackager) {
+			_ = w.Close()
 		}(r.writer)
 	}
 	if r.filenameCh != nil {
