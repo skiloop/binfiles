@@ -13,3 +13,12 @@ func open2read(filename string) (*os.File, error) {
 	}
 	return fn, nil
 }
+
+func CloneBytes(src []byte) []byte {
+	if len(src) > 0 {
+		dst := make([]byte, len(src))
+		copy(dst, src)
+		return dst
+	}
+	return []byte{}
+}

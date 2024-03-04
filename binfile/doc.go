@@ -82,7 +82,7 @@ func Decompress(doc *Doc, compressType int) (dst *Doc, err error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Doc{Key: bytes.Clone(doc.Key), Content: data}, nil
+	return &Doc{Key: CloneBytes(doc.Key), Content: data}, nil
 }
 
 func Compress(doc *Doc, compressType int) (dst *Doc, err error) {
@@ -102,7 +102,7 @@ func Compress(doc *Doc, compressType int) (dst *Doc, err error) {
 	if err = writer.Close(); err != nil {
 		return nil, err
 	}
-	return &Doc{Key: bytes.Clone(doc.Key), Content: buf.Bytes()}, nil
+	return &Doc{Key: CloneBytes(doc.Key), Content: buf.Bytes()}, nil
 }
 
 // writeDoc Write document to writer
