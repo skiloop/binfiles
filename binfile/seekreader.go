@@ -35,7 +35,6 @@ func (sr *seekReader) ReadAt(offset int64, decompress bool) (doc *Doc, err error
 }
 
 func (sr *seekReader) ReadKey(doc *DocKey) (n int, err error) {
-	doc = &DocKey{}
 	n, err = readHeader(sr.rs, doc)
 	if err != nil {
 		return n, err
