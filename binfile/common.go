@@ -58,30 +58,6 @@ func getDecompressReader(ct int, src io.Reader) (reader io.Reader, err error) {
 	}
 }
 
-type Flusher interface {
-	Flush() error
-	io.WriteCloser
-}
-
-type flushWriter struct {
-	dst Flusher
-}
-
-func (bw *flushWriter) Write(p []byte) (int, error) {
-	defer func(w Flusher) {
-		_ = w.Flush()
-	}(bw.dst)
-	return bw.dst.Write(p)
-}
-
-func (bw *flushWriter) Close() error {
-	return bw.dst.Close()
-}
-
-func newFlushWriter(w Flusher) *flushWriter {
-	return &flushWriter{dst: w}
-}
-
 func getCompressCloser(compressType int, w io.Writer) (io.WriteCloser, error) {
 	switch compressType {
 	case NONE:

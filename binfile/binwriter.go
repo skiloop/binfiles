@@ -22,6 +22,7 @@ type BinWriter interface {
 	// Close writer
 	Close()
 	Open() error
+	Filename() string
 }
 
 func NewBinWriter(filename string, compressType int) BinWriter {
@@ -35,6 +36,9 @@ type binWriter struct {
 	compressType int
 }
 
+func (dw *binWriter) Filename() string {
+	return dw.filename
+}
 func (dw *binWriter) Close() {
 	if dw.file != nil {
 		_ = dw.file.Close()
