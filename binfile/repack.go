@@ -88,7 +88,7 @@ func (r *repackager) merge(stopCh chan interface{}) {
 	}
 	defer closeWriter(wtr, r.target)
 
-	wc, err := getCompressCloser(r.pt, wtr)
+	wc, err := getCompressWriter(r.pt, wtr)
 	if err != nil {
 		return
 	}
