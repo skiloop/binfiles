@@ -163,7 +163,7 @@ func searchDocs(br binfile.BinReader) {
 }
 
 func seekDoc(br binfile.BinReader) {
-	next, doc := br.Next(client.Seek.Offset)
+	next, doc := br.Next(client.Seek.Offset, binfile.Debug)
 	if next < 0 {
 		fmt.Printf("no document found")
 		return

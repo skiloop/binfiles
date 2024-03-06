@@ -17,7 +17,7 @@ type BinReader interface {
 	Count(offset int64, nThreads int, verboseStep uint32) int64
 	List(opt *ReadOption, keyOnly bool)
 	Search(opt SearchOption) int64
-	Next(offset int64) (pos int64, doc *Doc)
+	Next(offset int64, print bool) (pos int64, doc *Doc)
 }
 
 var InvalidDocumentFound = errors.New("invalid document found")
@@ -319,7 +319,7 @@ func (br *binReader) skipNext() (err error) {
 }
 
 // Next document position
-func (br *binReader) Next(offset int64) (pos int64, doc *Doc) {
+func (br *binReader) Next(offset int64, print bool) (pos int64, doc *Doc) {
 	var err error
 	pos = offset
 	for {
@@ -331,7 +331,7 @@ func (br *binReader) Next(offset int64) (pos int64, doc *Doc) {
 		if err == nil {
 			return pos, doc
 		}
-		if Debug {
+		if print {
 			bytes := pos - offset
 			if bytes < 1024 {
 				fmt.Printf("%10d\t%10d bytes search\n", pos, bytes)

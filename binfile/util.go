@@ -2,6 +2,7 @@ package binfile
 
 import (
 	"fmt"
+	"io"
 	"os"
 )
 
@@ -21,4 +22,11 @@ func CloneBytes(src []byte) []byte {
 		return dst
 	}
 	return []byte{}
+}
+
+func closeWriter(closer io.Closer, msg string) {
+	err := closer.Close()
+	if err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "%s close error: %v\n", msg, err)
+	}
 }
