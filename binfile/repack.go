@@ -20,6 +20,8 @@ type RepackCmd struct {
 	PackageCompressType string `short:"c" help:"package compression type" enum:"gzip,bz2,bzip2,xz,lz4,br,brotli,none" default:"none"`
 }
 
+const workerEndFlag = ""
+
 type repackager struct {
 	docCh      chan *Doc
 	filenameCh chan string
@@ -70,8 +72,8 @@ func (r *repackager) seeder() {
 			break
 		}
 	}
+	fmt.Printf("reader done with %d documents\n", count)
 	r.docCh <- nil
-	fmt.Println("reader done")
 }
 func closeWriter(closer io.Closer, msg string) {
 	err := closer.Close()
@@ -80,27 +82,26 @@ func closeWriter(closer io.Closer, msg string) {
 	}
 }
 func (r *repackager) merge(stopCh chan interface{}) {
-
-	wtr, err := os.OpenFile(r.target, writerFileFlag, 0644)
+	defer func() {
+		stopCh <- nil
+	}()
+	fw, err := os.OpenFile(r.target, writerFileFlag, 0644)
 	if err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "fail to open file %s: %v\n", r.target, err)
 		return
 	}
-	defer closeWriter(wtr, r.target)
+	defer closeWriter(fw, r.target)
 
-	wc, err := getCompressWriter(r.pt, wtr)
+	cw, err := getCompressWriter(r.pt, fw)
 	if err != nil {
 		return
 	}
-	defer closeWriter(wc, "compressor")
-	defer func() {
-		if err := recover(); err != nil {
-			_, _ = fmt.Fprintf(os.Stderr, "merger recover: %v\n", err)
-		}
-	}()
+	defer closeWriter(cw, "compressor")
+
 	var rdr *os.File
 	failed := false
 	var nw int64
+	count := 0
 	for {
 		filename := <-r.filenameCh
 		if filename == workerEndFlag {
@@ -116,20 +117,21 @@ func (r *repackager) merge(stopCh chan interface{}) {
 			continue
 		}
 		fmt.Printf("merging %s\n", filename)
-		nw, err = io.Copy(wc, rdr)
+		nw, err = io.Copy(cw, rdr)
 		_ = rdr.Close()
 		if err != nil {
 			_, _ = fmt.Fprintf(os.Stderr, "fail to append file %s: %v\n", filename, err)
 			failed = true
 			continue
 		}
-		//_ = os.Remove(filename)
+		count += 1
+		_ = os.Remove(filename)
 		if Debug {
 			fmt.Printf("%s merged with %d bytes\n", filename, nw)
 		}
 	}
-	stopCh <- nil
-	fmt.Println("merger done")
+	fmt.Printf("merger done with %d files\n", count)
+
 }
 
 func (r *repackager) worker(no int) {
@@ -140,8 +142,9 @@ func (r *repackager) worker(no int) {
 	if err != nil {
 		return
 	}
-
-	var count int64 = 0
+	init := 100 * no
+	count := int64(init)
+	docs := 0
 	for {
 		doc := <-r.docCh
 		if doc == nil {
@@ -157,22 +160,26 @@ func (r *repackager) worker(no int) {
 			_, _ = fmt.Fprintf(os.Stderr, "[%d]write error: %s, %v\n", no, doc.Key, err)
 			continue
 		}
-		if r.split > 0 {
-			count += 1
-			if count%int64(r.split) == 0 {
-				rp.Close()
-				r.filenameCh <- rp.Filename()
-				rp = r.nextBinWriter()
-				err = rp.Open()
-				if err != nil {
-					_, _ = fmt.Fprintf(os.Stderr, "[%d]failed to get next packager: %v\n", no, err)
-					break
-				}
+		docs += 1
+		count += 1
+
+		if r.split > 0 && count%int64(r.split) == 0 {
+			fmt.Printf("[%d] %s done with %d docs\n", no, rp.Filename(), docs)
+			rp.Close()
+			r.filenameCh <- rp.Filename()
+			rp = r.nextBinWriter()
+			err = rp.Open()
+			if err != nil {
+				_, _ = fmt.Fprintf(os.Stderr, "[%d]failed to get next packager: %v\n", no, err)
+				break
 			}
+			docs = 0
 		}
 	}
+	count -= int64(init)
+	fmt.Printf("[%d] %s done with %d docs\n", no, rp.Filename(), docs)
 	rp.Close()
-	fmt.Printf("worker %d done\n", no)
+	fmt.Printf("[%d]fileWorker done with %d docs\n", no, count)
 }
 
 func (r *repackager) start(source string, workerCount int) error {
