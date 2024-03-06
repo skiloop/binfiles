@@ -16,7 +16,3 @@ type DocPackageWriter struct {
 	binWriter
 	header *packageHeader
 }
-
-func (dp *DocPackageWriter) Open() error {
-	return dp.checkAndOpen()
-}

@@ -1,6 +1,7 @@
 package binfile
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"github.com/skiloop/binfiles/binfile/filelock"
@@ -30,6 +31,7 @@ func NewBinWriter(filename string, compressType int) BinWriter {
 }
 
 type binWriter struct {
+	compressDocWriter
 	filename     string
 	file         *os.File
 	mu           sync.Mutex
@@ -42,10 +44,11 @@ func (dw *binWriter) Filename() string {
 func (dw *binWriter) Close() {
 	if dw.file != nil {
 		_ = dw.file.Close()
+		dw.file = nil
 	}
 }
 
-func (dw *binWriter) checkAndOpen() error {
+func (dw *binWriter) Open() error {
 	if dw.file != nil {
 		return nil
 	}
@@ -54,6 +57,14 @@ func (dw *binWriter) checkAndOpen() error {
 		return err
 	}
 	dw.file = file
+	dw.w = file
+	if dw.buf == nil {
+		dw.buf = &bytes.Buffer{}
+		dw.compressor, err = getCompressWriter(dw.compressType, dw.buf)
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -76,11 +87,10 @@ func (dw *binWriter) unlock() error {
 	return err
 }
 
-func (dw *binWriter) Open() error {
-	return dw.checkAndOpen()
-}
-
 func (dw *binWriter) Write(doc *Doc) (int, error) {
+	if dw.file == nil {
+		return 0, errors.New("not opened yet")
+	}
 	var err error
 	if err = dw.lock(); err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "lock file error: %v\n", err)
@@ -89,18 +99,5 @@ func (dw *binWriter) Write(doc *Doc) (int, error) {
 	defer func() {
 		_ = dw.unlock()
 	}()
-	var dst *Doc
-	dst, err = Compress(doc, dw.compressType)
-	if err != nil {
-		return 0, err
-	}
-	return dst.writeDoc(dw.file)
-}
-
-func (dw *binWriter) open() (err error) {
-	if Debug {
-		fmt.Printf("opening file %s for writing\n", dw.filename)
-	}
-	dw.file, err = os.OpenFile(dw.filename, writerFileFlag, 0644)
-	return err
+	return dw.compressDocWriter.Write(doc)
 }

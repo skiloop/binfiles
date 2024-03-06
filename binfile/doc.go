@@ -90,7 +90,7 @@ func Compress(doc *Doc, compressType int) (dst *Doc, err error) {
 		return doc, nil
 	}
 	buf := bytes.Buffer{}
-	writer, err := getCompressCloser(compressType, &buf)
+	writer, err := getCompressWriter(compressType, &buf)
 	if err != nil {
 		return nil, err
 	}

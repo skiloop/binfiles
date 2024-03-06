@@ -25,8 +25,6 @@ const (
 var KeySizeLimit int32 = 1000
 var EmptyDocKey = "empty-doc."
 
-const workerEndFlag = "" // task worker end flag
-
 var CompressTypes = map[string]int{
 	"gzip":   GZIP,
 	"none":   NONE,
@@ -37,6 +35,10 @@ var CompressTypes = map[string]int{
 	"xz":     XZ,
 	"brotli": BROTLI,
 	"lz4":    LZ4,
+}
+
+type Flusher interface {
+	Flush() error
 }
 
 func getDecompressReader(ct int, src io.Reader) (reader io.Reader, err error) {
@@ -58,7 +60,7 @@ func getDecompressReader(ct int, src io.Reader) (reader io.Reader, err error) {
 	}
 }
 
-func getCompressCloser(compressType int, w io.Writer) (io.WriteCloser, error) {
+func getCompressWriter(compressType int, w io.Writer) (io.WriteCloser, error) {
 	switch compressType {
 	case NONE:
 		return NewNoneCompressWriter(w), nil
