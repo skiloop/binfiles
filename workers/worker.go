@@ -33,9 +33,11 @@ func (jr *JobsRunner) Run() {
 	}
 	// wait for all task done
 	wg.Wait()
-	select {
-	case jr.StopCh <- nil:
-	default:
+	if jr.StopCh != nil {
+		select {
+		case jr.StopCh <- nil:
+		default:
+		}
 	}
 	sw.Wait()
 	usage := time.Now().Sub(start)
