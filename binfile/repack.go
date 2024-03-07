@@ -157,7 +157,7 @@ func (r *repackager) worker(no int) {
 		}
 		_, err = rp.Write(doc)
 		if err != nil {
-			_, _ = fmt.Fprintf(os.Stderr, "[%d]write error: %s, %v\n", no, doc.Key, err)
+			_, _ = fmt.Fprintf(os.Stderr, "[%d] write error: %s, %v\n", no, doc.Key, err)
 			continue
 		}
 		docs += 1
@@ -170,7 +170,7 @@ func (r *repackager) worker(no int) {
 			rp = r.nextBinWriter()
 			err = rp.Open()
 			if err != nil {
-				_, _ = fmt.Fprintf(os.Stderr, "[%d]failed to get next packager: %v\n", no, err)
+				_, _ = fmt.Fprintf(os.Stderr, "[%d] failed to get next packager: %v\n", no, err)
 				break
 			}
 			docs = 0
@@ -179,7 +179,7 @@ func (r *repackager) worker(no int) {
 	count -= int64(init)
 	fmt.Printf("[%d] %s done with %d docs\n", no, rp.Filename(), docs)
 	rp.Close()
-	fmt.Printf("[%d]fileWorker done with %d docs\n", no, count)
+	fmt.Printf("[%d] worker done with %d docs\n", no, count)
 }
 
 func (r *repackager) start(source string, workerCount int) error {
