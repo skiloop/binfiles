@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/skiloop/binfiles/binfile/filelock"
+	"io"
 	"os"
 	"sync"
 )
@@ -100,4 +101,55 @@ func (dw *binWriter) Write(doc *Doc) (int, error) {
 		_ = dw.unlock()
 	}()
 	return dw.compressDocWriter.Write(doc)
+}
+
+type ccBinWriter struct {
+	binWriter
+	packageCompressType int
+}
+
+func (dw *ccBinWriter) Close() {
+	if dw.file != nil {
+		if wc, ok := dw.w.(io.WriteCloser); ok {
+			_ = wc.Close()
+		}
+		_ = dw.file.Close()
+		dw.file = nil
+	}
+}
+
+func (dw *ccBinWriter) Open() error {
+	if dw.file != nil {
+		return nil
+	}
+	file, err := os.OpenFile(dw.filename, writerFileFlag, 0644)
+	if err != nil {
+		return err
+	}
+	dw.file = file
+	dw.w, err = getCompressWriter(dw.packageCompressType, file)
+	if err != nil {
+		_ = dw.file.Close()
+		return err
+	}
+	if dw.buf == nil {
+		dw.buf = &bytes.Buffer{}
+		dw.compressor, err = getCompressWriter(dw.compressType, dw.buf)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func NewCCBinWriter(filename string, packageCompressType, compressType int) BinWriter {
+	return &ccBinWriter{
+		binWriter: binWriter{
+			filename:     filename,
+			file:         nil,
+			mu:           sync.Mutex{},
+			compressType: compressType,
+		},
+		packageCompressType: packageCompressType,
+	}
 }

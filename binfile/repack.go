@@ -1,16 +1,20 @@
 package binfile
 
 import (
+	"fmt"
+	"os"
+	"regexp"
 	"sync/atomic"
 )
 
 type RepackCmd struct {
-	Source              string `arg:"" help:"source bin file name"`
-	Target              string `arg:"" help:"target bin file name"`
+	Source              string `arg:"" help:"source bin file name or directory"`
+	Target              string `arg:"" help:"target bin file name or directory"`
 	Workers             int    `short:"w" help:"number of workers" default:"3"`
 	Split               int    `help:"max number of package, no limit if 0" default:"0"`
 	Limit               int    `help:"max number of docs, no limit if 0" default:"0"`
-	Mode                string `short:"m" help:"mode of repack, doc for worker on reading doc, file for on packaging" enum:"file,doc" default:"file"`
+	Pattern             string `short:"p" help:"file name pattern for path mode"`
+	Mode                string `short:"m" help:"mode of repack, doc for worker on reading doc, file for on packaging, path for multiple files and source and target are directory" enum:"file,doc,path" default:"file"`
 	SourceCompressType  string `short:"i" help:"source bin compression type" enum:"gzip,bzip2,bz2,br,brotli,none" default:"gzip"`
 	TargetCompressType  string `short:"t" help:"target bin compression type" enum:"gzip,bzip2,bz2,br,brotli,none" default:"none"`
 	PackageCompressType string `short:"c" help:"package compression type" enum:"gzip,bz2,bzip2,xz,lz4,br,brotli,none" default:"none"`
@@ -41,22 +45,47 @@ func Repack(opt RepackCmd) error {
 		}
 		return r.start(opt.Source, opt.Workers)
 	}
-	r := docRepack{
-		docCh:  make(chan *Doc, opt.Workers+3),
-		stopCh: make(chan interface{}),
-		limit:  opt.Limit,
-		source: opt.Source,
-		target: opt.Target,
-		pt:     CompressTypes[opt.PackageCompressType],
-		tt:     CompressTypes[opt.TargetCompressType],
-		st:     CompressTypes[opt.SourceCompressType],
-		split:  opt.Split,
-		pos:    atomic.Int64{},
+	if opt.Mode == "doc" {
+		r := docRepack{
+			docCh:  make(chan *Doc, opt.Workers+3),
+			stopCh: make(chan interface{}),
+			limit:  opt.Limit,
+			source: opt.Source,
+			target: opt.Target,
+			pt:     CompressTypes[opt.PackageCompressType],
+			tt:     CompressTypes[opt.TargetCompressType],
+			st:     CompressTypes[opt.SourceCompressType],
+			split:  opt.Split,
+			pos:    atomic.Int64{},
+		}
+		// no decompress and compression when input and output are the same
+		if r.st == r.tt {
+			r.tt = NONE
+			r.st = NONE
+		}
+		return r.start(opt.Workers)
 	}
-	// no decompress and compression when input and output are the same
-	if r.st == r.tt {
-		r.tt = NONE
-		r.st = NONE
+
+	r := pathRepack{
+		fnCh:    make(chan interface{}, opt.Workers),
+		stopCh:  make(chan interface{}),
+		src:     opt.Source,
+		dst:     opt.Target,
+		suffix:  getPackageSuffix(CompressTypes[opt.PackageCompressType]),
+		pattern: nil,
+		pt:      CompressTypes[opt.PackageCompressType],
+		tt:      CompressTypes[opt.TargetCompressType],
+		st:      CompressTypes[opt.SourceCompressType],
 	}
-	return r.start(opt.Workers)
+	fmt.Printf("file pattern: %s\n", opt.Pattern)
+	if opt.Pattern != "" {
+		p, err := regexp.Compile(opt.Pattern)
+		if err != nil {
+			_, _ = fmt.Fprintf(os.Stderr, "regex error: %v\n", err)
+			return err
+		}
+		r.pattern = p
+	}
+	r.start(opt.Workers)
+	return nil
 }

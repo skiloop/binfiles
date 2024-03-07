@@ -36,37 +36,43 @@ func Package(option *PackageOption, bw BinWriter) (err error) {
 	return nil
 }
 
-func searchFiles(path string, ch, stop chan interface{}, pattern *regexp.Regexp) {
+func searchFiles(root string, ch, stop chan interface{}, pattern *regexp.Regexp) {
 	if Debug {
-		fmt.Printf("searching files in %s\n", path)
+		fmt.Printf("searching files in %s\n", root)
 	}
-	err := filepath.WalkDir(path, func(path string, d fs.DirEntry, err error) error {
+	defer func() {
+		ch <- nil
+	}()
+	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
-			// path will not be dir if err is not nil
-			// stop processing dir if read dir error
+			// root will not be dir if err is not nil
+			// stopCh processing dir if read dir error
 			fmt.Printf("skip processing dir %s: %v\n", path, err)
 			return fs.SkipDir
 		}
 		// process only regular files (d is not nil if err is nil)
 		// filter out files those not match the pattern
 		if path == "" || !fs.FileMode.IsRegular(d.Type()) || pattern != nil && !pattern.MatchString(path) {
+			if Debug {
+				fmt.Printf("%s skipped\n", path)
+			}
 			return nil
 		}
 		// files are queue to processed
-		// and stop process
+		// and stopCh process
 		select {
 		case ch <- path:
 			return nil
 		case <-stop:
-			// stop walking when workers stopped
+			// stopCh walking when workers stopped
 			return errWorkersStopped
 		}
 	})
-	ch <- nil
+
 	if err != nil && !errors.Is(err, errWorkersStopped) {
-		_, _ = fmt.Fprintf(os.Stderr, "search path error: %v\n", err)
+		_, _ = fmt.Fprintf(os.Stderr, "search root error: %v\n", err)
 	}
-	fmt.Println("path search done")
+	fmt.Println("root search done")
 }
 
 func readContent(path string, compress int) ([]byte, error) {

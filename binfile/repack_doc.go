@@ -60,19 +60,13 @@ func (r *docRepack) merge() {
 	defer func() {
 		r.stopCh <- nil
 	}()
-	fw, err := os.OpenFile(r.target, writerFileFlag, 0644)
-	if err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "fail to open file %s: %v\n", r.target, err)
-		return
-	}
-	defer closeWriter(fw, r.target)
 
-	cw, err := getCompressWriter(r.pt, fw)
-	if err != nil {
+	bw := NewCCBinWriter(r.target, r.pt, r.tt)
+	var err error
+	if err = bw.Open(); err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "fail to open %s: %v\n", bw.Filename(), err)
 		return
 	}
-	defer closeWriter(cw, "compressor")
-	bw := NewDocWriter(cw)
 
 	count := 0
 	for {

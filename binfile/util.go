@@ -1,6 +1,7 @@
 package binfile
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -29,4 +30,10 @@ func closeWriter(closer io.Closer, msg string) {
 	if err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "%s close error: %v\n", msg, err)
 	}
+}
+
+func CheckFileExists(filePath string) bool {
+	_, err := os.Stat(filePath)
+	//return !os.IsNotExist(err)
+	return !errors.Is(err, os.ErrNotExist)
 }

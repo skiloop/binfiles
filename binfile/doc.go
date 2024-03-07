@@ -10,7 +10,9 @@ import (
 
 var (
 	ErrValueDecompress = errors.New("value decompress error")
+	ErrInvalidKey      = errors.New("invalid key")
 	ErrReadKey         = errors.New("key read error")
+	ErrFileExists      = errors.New("file already exists")
 	//ErrNotSupport      = errors.New("not support for this compression type")
 )
 
@@ -151,7 +153,9 @@ func readHeader(reader io.Reader, doc *DocKey) (int, error) {
 	if err != nil {
 		return nr, err
 	}
-
+	if node.Size > KeySizeLimit {
+		return nr, ErrInvalidKey
+	}
 	n, err := readInt32(reader, &doc.ContentSize)
 	nr += n
 	doc.Key = node.Data
