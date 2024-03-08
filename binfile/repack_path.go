@@ -3,6 +3,7 @@ package binfile
 import (
 	"fmt"
 	"github.com/skiloop/binfiles/workers"
+	"io"
 	"os"
 	"path"
 	"regexp"
@@ -11,9 +12,8 @@ import (
 type pathRepack struct {
 	fnCh    chan interface{}
 	stopCh  chan interface{}
-	src     string // source path
-	dst     string // target path
-	suffix  string
+	src     string         // source path
+	dst     string         // target path
 	pattern *regexp.Regexp // file pattern
 	pt      int
 	tt      int
@@ -45,7 +45,7 @@ func (p *pathRepack) worker(no int) {
 	fmt.Printf("[%d] worker done with %d files\n", no, count)
 }
 func (p *pathRepack) pack(filename string) (err error) {
-	dst := path.Join(p.dst, path.Base(filename)+"."+p.suffix)
+	dst := path.Join(p.dst, path.Base(filename)+getPackageSuffix(p.pt))
 	if CheckFileExists(dst) {
 		_, _ = fmt.Fprintf(os.Stderr, "file already exists: %s\n", dst)
 		return ErrFileExists
@@ -65,17 +65,22 @@ func (p *pathRepack) pack(filename string) (err error) {
 	br, _ := rd.(*binReader)
 	var doc *Doc
 	count := uint32(0)
+	skip := uint32(0)
 	for {
 		doc, err = br.docSeeker.Read(true)
 		if err != nil {
+			offset, _ := br.docSeeker.Seek(0, io.SeekCurrent)
+			_, _ = fmt.Fprintf(os.Stderr, "error at offset %d:  %v\n", offset, err)
 			break
 		}
 		if _, err = bw.Write(doc); err != nil {
+			debug("write doc %s error: %v\n", doc.Key, err)
+			skip += 1
 			continue
 		}
 		count += 1
 	}
-	fmt.Printf("convert %s to %s with %d docs\n", br.filename, bw.Filename(), count)
+	fmt.Printf("convert %s to %s with %d docs and skip %d docs\n", br.filename, bw.Filename(), count, skip)
 	return nil
 }
 
@@ -84,15 +89,15 @@ func getPackageSuffix(pt int) string {
 	case NONE:
 		return ""
 	case GZIP:
-		return "gz"
+		return ".gz"
 	case BROTLI:
-		return "br"
+		return ".br"
 	case BZIP2:
-		return "bz2"
+		return ".bz2"
 	case LZ4:
-		return "lz4"
+		return ".lz4"
 	case XZ:
-		return "xz"
+		return ".xz"
 	}
 	return ""
 }

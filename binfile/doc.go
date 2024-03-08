@@ -4,15 +4,19 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 	"unsafe"
 )
 
 var (
-	ErrValueDecompress = errors.New("value decompress error")
-	ErrInvalidKey      = errors.New("invalid key")
-	ErrReadKey         = errors.New("key read error")
-	ErrFileExists      = errors.New("file already exists")
+	ErrDecompressReader = errors.New("fail to get decompress reader")
+	ErrCompressWriter   = errors.New("fail to get compress writer")
+	ErrValueDecompress  = errors.New("value decompress error")
+	ErrInvalidKey       = errors.New("invalid key")
+	ErrReadKey          = errors.New("key read error")
+	ErrReadDoc          = errors.New("doc read error")
+	ErrFileExists       = errors.New("file already exists")
 	//ErrNotSupport      = errors.New("not support for this compression type")
 )
 
@@ -44,7 +48,8 @@ func ReadDoc(r io.Reader, doc *Doc) (int, error) {
 	n, err = r.Read(doc.Content)
 	nr += n
 	if err != nil {
-		return nr, err
+		_ = fmt.Errorf("read doc content error: %v\n", err)
+		return nr, ErrReadDoc
 	}
 	doc.Key = dc.Key
 	return nr, nil
@@ -76,13 +81,15 @@ func Decompress(doc *Doc, compressType int) (dst *Doc, err error) {
 	}
 	reader, err := getDecompressReader(compressType, bytes.NewReader(doc.Content))
 	if err != nil {
-		return nil, err
+		_ = fmt.Errorf("%v\n", err)
+		return nil, ErrDecompressReader
 	}
 
 	var data []byte
 	data, err = io.ReadAll(reader)
 	if err != nil {
-		return nil, err
+		_ = fmt.Errorf("%v\n", err)
+		return nil, ErrValueDecompress
 	}
 	return &Doc{Key: CloneBytes(doc.Key), Content: data}, nil
 }
@@ -132,7 +139,8 @@ func writeNode(w io.Writer, data []byte) (n int, err error) {
 func readNode(reader io.Reader, node *Node) (nr int, err error) {
 	nr, err = readInt32(reader, &node.Size)
 	if err != nil {
-		return nr, err
+		_ = fmt.Errorf("read int error: %v\n", err)
+		return nr, ErrReadKey
 	}
 	if node.Size < 0 {
 		return nr, ErrReadKey
@@ -140,11 +148,17 @@ func readNode(reader io.Reader, node *Node) (nr int, err error) {
 	node.Data = make([]byte, node.Size)
 	var n int
 	n, err = reader.Read(node.Data)
-	if err == io.EOF && int32(n) < node.Size {
-		return nr + n, InvalidDocumentFound
-	}
 	nr += n
-	return nr, err
+
+	if err == io.EOF && int32(n) < node.Size {
+		return nr, InvalidDocumentFound
+	}
+
+	if err != nil && err != io.EOF {
+		_ = fmt.Errorf("read node data error: %v\n", err)
+		return nr, ErrReadDoc
+	}
+	return nr, nil
 }
 
 func readHeader(reader io.Reader, doc *DocKey) (int, error) {
@@ -153,7 +167,7 @@ func readHeader(reader io.Reader, doc *DocKey) (int, error) {
 	if err != nil {
 		return nr, err
 	}
-	if node.Size > KeySizeLimit {
+	if int32(len(string(doc.Key))) > KeySizeLimit {
 		return nr, ErrInvalidKey
 	}
 	n, err := readInt32(reader, &doc.ContentSize)

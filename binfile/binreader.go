@@ -1,6 +1,7 @@
 package binfile
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -8,8 +9,16 @@ import (
 	"os"
 	"regexp"
 	"time"
+	"unsafe"
 )
 
+type SeekOption struct {
+	Offset  int64
+	Pattern string
+	KeySize int
+	DocSize int
+	End     int64
+}
 type BinReader interface {
 	Close()
 	Read(offset int64, decompress bool) (*Doc, error)
@@ -17,7 +26,7 @@ type BinReader interface {
 	Count(offset int64, nThreads int, verboseStep uint32) int64
 	List(opt *ReadOption, keyOnly bool)
 	Search(opt SearchOption) int64
-	Next(offset int64, print bool) (pos int64, doc *Doc)
+	Next(opt *SeekOption) (pos int64, doc *Doc)
 }
 
 var InvalidDocumentFound = errors.New("invalid document found")
@@ -319,26 +328,115 @@ func (br *binReader) skipNext() (err error) {
 }
 
 // Next document position
-func (br *binReader) Next(offset int64, print bool) (pos int64, doc *Doc) {
+func (br *binReader) Next(opt *SeekOption) (pos int64, doc *Doc) {
 	var err error
-	pos = offset
-	for {
-		err = br.resetOffset(pos)
+	var regex *regexp.Regexp = nil
+	if opt.Pattern != "" {
+		regex, err = regexp.Compile(opt.Pattern)
+		if err != nil {
+			_ = fmt.Errorf("regex error: %v\n", err)
+			return 0, nil
+		}
+	}
+	pos = opt.Offset
+	err = br.resetOffset(pos)
+	if err == io.EOF {
+		return -1, nil
+	}
+	buff := make([]byte, int(unsafe.Sizeof(int32(0)))*2+int(KeySizeLimit))
+
+	_, err = br.file.Read(buff)
+	if err != nil {
+		//TODO: doc size not larger than len(buff)
 		if err == io.EOF {
-			return -1, nil
+			return 0, nil
 		}
-		doc, err = br.docSeeker.Read(true)
-		if err == nil {
-			return pos, doc
+		_ = fmt.Errorf("read file error: %v\n", err)
+		return 0, nil
+	}
+	var dk *DocKey
+	for {
+		dk, err = br.checkKey(buff, regex, opt.KeySize, opt.DocSize)
+		if err != nil {
+			break
 		}
-		if print {
-			bytes := pos - offset
-			if bytes < 1024 {
-				fmt.Printf("%10d\t%10d bytes search\n", pos, bytes)
+		if dk != nil {
+			doc, err = br.docSeeker.ReadAt(pos, true)
+			if doc != nil || err == io.EOF {
+				break
+			}
+			_, _ = br.file.Seek(pos+int64(len(buff)), io.SeekStart)
+		}
+		buff, err = br.readByte(buff)
+		if err != nil {
+			break
+		}
+		pos += 1
+		if Debug {
+			nBytes := pos - opt.Offset
+			if nBytes < 1024 {
+				fmt.Printf("%10d\t%10d nBytes search\n", pos, nBytes)
 			} else {
-				fmt.Printf("%10d\t%10dk search\n", pos, bytes)
+				fmt.Printf("%10d\t%10dk search\n", pos, nBytes)
 			}
 		}
 		pos += 1
+		if opt.End > 0 && pos > opt.End {
+			break
+		}
 	}
+	if err != nil {
+		_ = fmt.Errorf("%v\n", err)
+		return -1, nil
+	}
+	return pos, doc
+}
+
+func (br *binReader) checkKey(buff []byte, pattern *regexp.Regexp,
+	keyLimit, contentLimit int) (*DocKey, error) {
+	var size int32
+	r := bytes.NewBuffer(buff)
+	_, _ = readInt32(r, &size)
+	ks := size + 4
+	if size > int32(len(buff)-8) || keyLimit > 0 && int32(keyLimit) < size ||
+		pattern != nil && !pattern.MatchString(string(buff[4:ks])) {
+		return nil, nil
+	}
+	doc := &DocKey{
+		KeySize:     size,
+		ContentSize: 0,
+		Key:         buff[4:ks],
+	}
+	ks += 4
+	if ks < int32(len(buff)) {
+		r = bytes.NewBuffer(buff[ks:])
+		_, _ = readInt32(r, &size)
+		if contentLimit > 0 && int32(contentLimit) < size {
+			return nil, nil
+		}
+		doc.ContentSize = size
+		return doc, nil
+	}
+	buff = append(buff, make([]byte, int(ks)-len(buff))...)
+	_, err := br.file.Read(buff[ks:])
+	if err != nil {
+		return nil, err
+	}
+	_, _ = readInt32(r, &size)
+	if contentLimit > 0 && int32(contentLimit) < size {
+		_, _ = br.file.Seek(-4, io.SeekCurrent)
+		return nil, nil
+	}
+	doc.ContentSize = size
+	return doc, nil
+}
+func (br *binReader) readByte(buff []byte) ([]byte, error) {
+	for i := 0; i < len(buff); i++ {
+		buff[i] = buff[i+1]
+	}
+	_, err := br.file.Read(buff[:1])
+	if err != nil {
+		return nil, err
+	}
+	return buff, nil
 }

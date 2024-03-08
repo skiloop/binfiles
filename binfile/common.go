@@ -2,6 +2,7 @@ package binfile
 
 import (
 	"compress/gzip"
+	"fmt"
 	"github.com/andybalholm/brotli"
 	"github.com/dsnet/compress/bzip2"
 	"github.com/pierrec/lz4"
@@ -79,4 +80,9 @@ func getCompressWriter(compressType int, w io.Writer) (io.WriteCloser, error) {
 		return gzip.NewWriter(w), nil
 	}
 	//return nil, errors.New(fmt.Sprintf("unknown package compression type %d", compressType))
+}
+func debug(format string, a ...any) {
+	if Debug {
+		fmt.Printf(format, a...)
+	}
 }

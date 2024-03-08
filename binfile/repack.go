@@ -71,7 +71,6 @@ func Repack(opt RepackCmd) error {
 		stopCh:  make(chan interface{}),
 		src:     opt.Source,
 		dst:     opt.Target,
-		suffix:  getPackageSuffix(CompressTypes[opt.PackageCompressType]),
 		pattern: nil,
 		pt:      CompressTypes[opt.PackageCompressType],
 		tt:      CompressTypes[opt.TargetCompressType],

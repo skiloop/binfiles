@@ -35,7 +35,13 @@ func (r *docRepack) worker(no int) {
 	}
 	reader, _ := br.(*binReader)
 	count := 0
-	offset, doc := reader.Next(offset, false)
+	offset, doc := reader.Next(&SeekOption{
+		Offset:  offset,
+		Pattern: "",
+		KeySize: int(KeySizeLimit),
+		DocSize: -1,
+		End:     -1,
+	})
 	if doc == nil || offset >= end {
 		return
 	}
