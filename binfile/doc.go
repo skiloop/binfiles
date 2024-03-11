@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"unsafe"
 )
 
@@ -48,7 +49,7 @@ func ReadDoc(r io.Reader, doc *Doc) (int, error) {
 	n, err = r.Read(doc.Content)
 	nr += n
 	if err != nil {
-		_ = fmt.Errorf("read doc content error: %v\n", err)
+		_, _ = fmt.Fprintf(os.Stderr, "read doc content error: %v\n", err)
 		return nr, ErrReadDoc
 	}
 	doc.Key = dc.Key
@@ -81,14 +82,14 @@ func Decompress(doc *Doc, compressType int) (dst *Doc, err error) {
 	}
 	reader, err := getDecompressReader(compressType, bytes.NewReader(doc.Content))
 	if err != nil {
-		_ = fmt.Errorf("%v\n", err)
+		_, _ = fmt.Fprintf(os.Stderr, "%v\n", err)
 		return nil, ErrDecompressReader
 	}
 
 	var data []byte
 	data, err = io.ReadAll(reader)
 	if err != nil {
-		_ = fmt.Errorf("%v\n", err)
+		_, _ = fmt.Fprintf(os.Stderr, "%v\n", err)
 		return nil, ErrValueDecompress
 	}
 	return &Doc{Key: CloneBytes(doc.Key), Content: data}, nil
@@ -138,8 +139,11 @@ func writeNode(w io.Writer, data []byte) (n int, err error) {
 
 func readNode(reader io.Reader, node *Node) (nr int, err error) {
 	nr, err = readInt32(reader, &node.Size)
+	if err == io.EOF {
+		return nr, err
+	}
 	if err != nil {
-		_ = fmt.Errorf("read int error: %v\n", err)
+		_, _ = fmt.Fprintf(os.Stderr, "read int error: %v\n", err)
 		return nr, ErrReadKey
 	}
 	if node.Size < 0 {
@@ -155,7 +159,7 @@ func readNode(reader io.Reader, node *Node) (nr int, err error) {
 	}
 
 	if err != nil && err != io.EOF {
-		_ = fmt.Errorf("read node data error: %v\n", err)
+		_, _ = fmt.Fprintf(os.Stderr, "read node data error: %v\n", err)
 		return nr, ErrReadDoc
 	}
 	return nr, nil

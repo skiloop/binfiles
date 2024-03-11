@@ -132,12 +132,13 @@ func (br *binReader) skipDocs(count int32) {
 
 // Count how many documents in file start from offset
 func (br *binReader) Count(offset int64, nThreads int, verboseStep uint32) int64 {
+
+	if nThreads <= 1 {
+		return br.simpleCount(offset, -1, 0, verboseStep)
+	}
 	readSize, err := br.docSeeker.Seek(offset, io.SeekStart)
 	if err != nil {
 		return -1
-	}
-	if nThreads <= 1 {
-		return br.simpleCount(readSize, -1, 0, verboseStep)
 	}
 	workerReadSize := readSize / int64(nThreads)
 	countCh := make(chan int64, nThreads)
@@ -180,7 +181,7 @@ func (br *binReader) conCount(ch chan int64, start, end int64, no int, verboseSt
 
 func (br *binReader) simpleCount(start, end int64, no int, verboseStep uint32) (count int64) {
 	count = 0
-	curPos, err := br.docSeeker.Seek(start, io.SeekCurrent)
+	curPos, err := br.docSeeker.Seek(start, io.SeekStart)
 	if err != nil {
 		return count
 	}
@@ -334,7 +335,7 @@ func (br *binReader) Next(opt *SeekOption) (pos int64, doc *Doc) {
 	if opt.Pattern != "" {
 		regex, err = regexp.Compile(opt.Pattern)
 		if err != nil {
-			_ = fmt.Errorf("regex error: %v\n", err)
+			_, _ = fmt.Fprintf(os.Stderr, "regex error: %v\n", err)
 			return 0, nil
 		}
 	}
@@ -351,7 +352,7 @@ func (br *binReader) Next(opt *SeekOption) (pos int64, doc *Doc) {
 		if err == io.EOF {
 			return 0, nil
 		}
-		_ = fmt.Errorf("read file error: %v\n", err)
+		_, _ = fmt.Fprintf(os.Stderr, "read file error: %v\n", err)
 		return 0, nil
 	}
 	var dk *DocKey
@@ -386,7 +387,7 @@ func (br *binReader) Next(opt *SeekOption) (pos int64, doc *Doc) {
 		}
 	}
 	if err != nil {
-		_ = fmt.Errorf("%v\n", err)
+		_, _ = fmt.Fprintf(os.Stderr, "%v\n", err)
 		return -1, nil
 	}
 	return pos, doc
