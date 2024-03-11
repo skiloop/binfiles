@@ -43,11 +43,29 @@ func ReadDoc(r io.Reader, doc *Doc) (int, error) {
 	if err != nil {
 		return nr, err
 	}
-
-	doc.Content = make([]byte, dc.ContentSize)
+	if dc.ContentSize > MAX_DOC_SIZE || dc.ContentSize < 0 {
+		return nr, ErrReadDoc
+	}
 	var n int
-	n, err = r.Read(doc.Content)
-	nr += n
+
+	if dc.ContentSize < 512 {
+		doc.Content = make([]byte, dc.ContentSize)
+		n, err = r.Read(doc.Content)
+		nr += n
+	} else {
+		buf := make([]byte, 512)
+		for {
+			n, err = r.Read(buf)
+			if err != nil || err != io.EOF {
+				break
+			}
+			doc.Content = append(doc.Content, buf[:n]...)
+			if int32(len(doc.Content)) >= dc.ContentSize || err == io.EOF {
+				break
+			}
+		}
+	}
+
 	if err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "read doc content error: %v\n", err)
 		return nr, ErrReadDoc
@@ -146,7 +164,7 @@ func readNode(reader io.Reader, node *Node) (nr int, err error) {
 		_, _ = fmt.Fprintf(os.Stderr, "read int error: %v\n", err)
 		return nr, ErrReadKey
 	}
-	if node.Size < 0 {
+	if node.Size < 0 || node.Size > MAX_DOC_SIZE {
 		return nr, ErrReadKey
 	}
 	node.Data = make([]byte, node.Size)

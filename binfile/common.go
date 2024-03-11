@@ -26,6 +26,8 @@ const (
 var KeySizeLimit int32 = 1000
 var EmptyDocKey = "empty-doc."
 
+const MAX_DOC_SIZE = 0x40000000 // 1GB
+
 var CompressTypes = map[string]int{
 	"gzip":   GZIP,
 	"none":   NONE,

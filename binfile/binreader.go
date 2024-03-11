@@ -136,18 +136,18 @@ func (br *binReader) Count(offset int64, nThreads int, verboseStep uint32) int64
 	if nThreads <= 1 {
 		return br.simpleCount(offset, -1, 0, verboseStep)
 	}
-	readSize, err := br.docSeeker.Seek(offset, io.SeekStart)
+	remainSize, err := br.docSeeker.Seek(offset, io.SeekEnd)
 	if err != nil {
 		return -1
 	}
-	workerReadSize := readSize / int64(nThreads)
+	workerReadSize := remainSize / int64(nThreads)
 	countCh := make(chan int64, nThreads)
-
+	start := offset
 	for no := 0; no < nThreads; no++ {
-		go br.conCount(countCh, offset, offset+workerReadSize, no, verboseStep)
-		offset += workerReadSize
-		if offset > readSize {
-			offset = readSize
+		go br.conCount(countCh, start, start+workerReadSize, no, verboseStep)
+		start += workerReadSize
+		if start-offset > remainSize {
+			break
 		}
 	}
 	total := int64(0)
@@ -181,8 +181,14 @@ func (br *binReader) conCount(ch chan int64, start, end int64, no int, verboseSt
 
 func (br *binReader) simpleCount(start, end int64, no int, verboseStep uint32) (count int64) {
 	count = 0
-	curPos, err := br.docSeeker.Seek(start, io.SeekStart)
-	if err != nil {
+	curPos, doc := br.Next(&SeekOption{
+		Offset:  start,
+		Pattern: "",
+		KeySize: int(KeySizeLimit),
+		DocSize: MAX_DOC_SIZE,
+		End:     end,
+	})
+	if doc == nil {
 		return count
 	}
 	var nextVerbose = uint32(1)
@@ -193,6 +199,8 @@ func (br *binReader) simpleCount(start, end int64, no int, verboseStep uint32) (
 			fmt.Printf("[%d] count how many documents from position %d to workerEndFlag\n", no, start)
 		}
 	}
+	var err error
+	count += 1
 	for {
 		err = br.skipNext()
 		if err != nil {
@@ -363,7 +371,7 @@ func (br *binReader) Next(opt *SeekOption) (pos int64, doc *Doc) {
 		}
 		if dk != nil {
 			doc, err = br.docSeeker.ReadAt(pos, true)
-			if doc != nil || err == io.EOF {
+			if doc != nil {
 				break
 			}
 			_, _ = br.file.Seek(pos+int64(len(buff)), io.SeekStart)
@@ -399,7 +407,7 @@ func (br *binReader) checkKey(buff []byte, pattern *regexp.Regexp,
 	r := bytes.NewBuffer(buff)
 	_, _ = readInt32(r, &size)
 	ks := size + 4
-	if size > int32(len(buff)-8) || keyLimit > 0 && int32(keyLimit) < size ||
+	if size <= 0 || size > int32(len(buff)-8) || keyLimit > 0 && int32(keyLimit) < size ||
 		pattern != nil && !pattern.MatchString(string(buff[4:ks])) {
 		return nil, nil
 	}
@@ -412,7 +420,7 @@ func (br *binReader) checkKey(buff []byte, pattern *regexp.Regexp,
 	if ks < int32(len(buff)) {
 		r = bytes.NewBuffer(buff[ks:])
 		_, _ = readInt32(r, &size)
-		if contentLimit > 0 && int32(contentLimit) < size {
+		if size < 0 || contentLimit > 0 && int32(contentLimit) < size {
 			return nil, nil
 		}
 		doc.ContentSize = size
@@ -432,9 +440,8 @@ func (br *binReader) checkKey(buff []byte, pattern *regexp.Regexp,
 	return doc, nil
 }
 func (br *binReader) readByte(buff []byte) ([]byte, error) {
-	for i := 0; i < len(buff); i++ {
-		buff[i] = buff[i+1]
-	}
+	buff = buff[1:]
+	buff = append(buff, make([]byte, 1)...)
 	_, err := br.file.Read(buff[:1])
 	if err != nil {
 		return nil, err
