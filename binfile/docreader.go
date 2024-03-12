@@ -33,7 +33,7 @@ func (dr *docReader) Read(decompress bool) (doc *Doc, err error) {
 	if err != nil {
 		return nil, err
 	}
-	if decompress {
+	if decompress && len(doc.Content) > 0 {
 		return Decompress(doc, dr.compressType)
 	}
 	return doc, nil

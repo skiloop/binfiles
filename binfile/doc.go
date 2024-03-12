@@ -43,30 +43,29 @@ func ReadDoc(r io.Reader, doc *Doc) (int, error) {
 	if err != nil {
 		return nr, err
 	}
-	if dc.ContentSize > MAX_DOC_SIZE || dc.ContentSize < 0 {
+	if dc.ContentSize > MAX_DOC_SIZE || dc.ContentSize <= 0 {
 		return nr, ErrReadDoc
 	}
 	var n int
 
-	if dc.ContentSize < 512 {
-		doc.Content = make([]byte, dc.ContentSize)
-		n, err = r.Read(doc.Content)
-		nr += n
-	} else {
-		buf := make([]byte, 512)
-		for {
-			n, err = r.Read(buf)
-			if err != nil || err != io.EOF {
-				break
-			}
-			doc.Content = append(doc.Content, buf[:n]...)
-			if int32(len(doc.Content)) >= dc.ContentSize || err == io.EOF {
-				break
-			}
+	doc.Content = make([]byte, 0, 512)
+	for {
+		if len(doc.Content) == cap(doc.Content) {
+			doc.Content = append(doc.Content, 0)[:len(doc.Content)]
+		}
+		if int32(cap(doc.Content)) > dc.ContentSize {
+			n = int(dc.ContentSize)
+		} else {
+			n = cap(doc.Content)
+		}
+		n, err = r.Read(doc.Content[len(doc.Content):n])
+		doc.Content = doc.Content[:len(doc.Content)+n]
+		if err != nil || int32(len(doc.Content)) >= dc.ContentSize {
+			break
 		}
 	}
 
-	if err != nil {
+	if err != nil && io.EOF != err {
 		_, _ = fmt.Fprintf(os.Stderr, "read doc content error: %v\n", err)
 		return nr, ErrReadDoc
 	}
@@ -99,8 +98,8 @@ func Decompress(doc *Doc, compressType int) (dst *Doc, err error) {
 		return doc, nil
 	}
 	reader, err := getDecompressReader(compressType, bytes.NewReader(doc.Content))
-	if err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "%v\n", err)
+	if err != nil || reader == nil {
+		_, _ = fmt.Fprintf(os.Stderr, "decompressor error: %v\n", err)
 		return nil, ErrDecompressReader
 	}
 
