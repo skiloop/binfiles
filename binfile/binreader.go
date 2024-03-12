@@ -43,7 +43,7 @@ func NewBinReader(filename string, compressType int) (BinReader, error) {
 
 type ReadOption struct {
 	Offset int64 `json:"start offset"`
-	Limit  int32 `json:"number of document to read"`
+	Limit  int32 `help:"number of document to read, -1 to read all"`
 	Step   int32 `json:"document read interval"`
 }
 
