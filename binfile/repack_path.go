@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path"
+	"path/filepath"
 	"regexp"
 )
 
@@ -45,7 +46,7 @@ func (p *pathRepack) worker(no int) {
 	fmt.Printf("[%d] worker done with %d files\n", no, count)
 }
 func (p *pathRepack) pack(filename string) (err error) {
-	dst := path.Join(p.dst, path.Base(filename)+getPackageSuffix(p.pt))
+	dst := filepath.Join(p.dst, path.Base(filename)+getPackageSuffix(p.pt))
 	if CheckFileExists(dst) {
 		_, _ = fmt.Fprintf(os.Stderr, "file already exists: %s\n", dst)
 		return ErrFileExists
@@ -57,7 +58,7 @@ func (p *pathRepack) pack(filename string) (err error) {
 	}
 	defer bw.Close()
 	var rd BinReader
-	rd, err = NewBinReader(path.Join(filename), p.st)
+	rd, err = NewBinReader(filepath.Join(filename), p.st)
 	if err != nil {
 		return err
 	}
@@ -66,12 +67,17 @@ func (p *pathRepack) pack(filename string) (err error) {
 	var doc *Doc
 	count := uint32(0)
 	skip := uint32(0)
-	for {
+	running := true
+	for running {
 		doc, err = br.docSeeker.Read(true)
-		if err != nil {
+		if err != nil && err != io.EOF {
 			offset, _ := br.docSeeker.Seek(0, io.SeekCurrent)
 			_, _ = fmt.Fprintf(os.Stderr, "error at offset %d:  %v\n", offset, err)
 			break
+		}
+		running = err != io.EOF
+		if doc == nil {
+			continue
 		}
 		if _, err = bw.Write(doc); err != nil {
 			debug("write doc %s error: %v\n", doc.Key, err)
