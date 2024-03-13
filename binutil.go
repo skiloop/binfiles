@@ -19,9 +19,11 @@ type ListCmd struct {
 }
 
 type ReadCmd struct {
-	Input  string `arg:"" help:"input file name"`
-	Offset int64  `arg:"" optional:"" help:"start position" default:"0"`
-	Limit  int32  `short:"l" help:"number of documents to read, 0 means read all" default:"1"`
+	Input   string `arg:"" help:"input file name"`
+	Offset  int64  `arg:"" optional:"" help:"start position" default:"0"`
+	Output  string `short:"o" help:"output file name, empty to std output" default:""`
+	OutType string `short:"c" help:"output compression type, only works when output not empty" enum:"gzip,bz2,xz,br,brotli,lz4,none" default:"none"`
+	Limit   int32  `short:"l" help:"number of documents to read, 0 means read all" default:"1"`
 }
 
 type CountCmd struct {
@@ -103,9 +105,11 @@ func listDocs(br binfile.BinReader) {
 func readDocs(br binfile.BinReader) {
 	defer br.Close()
 	opt := binfile.ReadOption{
-		Offset: client.Read.Offset,
-		Limit:  client.Read.Limit,
-		Step:   client.Step,
+		Offset:      client.Read.Offset,
+		Limit:       client.Read.Limit,
+		Step:        client.Step,
+		OutCompress: binfile.CompressTypes[client.Read.OutType],
+		Output:      client.Read.Output,
 	}
 	br.ReadDocs(&opt)
 }

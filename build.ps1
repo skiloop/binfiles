@@ -3,7 +3,7 @@
 
 param(
     [Parameter(Position=0)]
-    [String]$os
+    [String]$os = "windows"
 )
 
 $env:PACKAGE="github.com/skiloop/binfiles"

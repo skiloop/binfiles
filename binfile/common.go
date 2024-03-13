@@ -90,6 +90,10 @@ func debug(format string, a ...any) {
 	}
 }
 
+func errorf(format string, a ...any) {
+	_, _ = fmt.Fprintf(os.Stderr, format, a...)
+}
+
 type outWriter struct {
 	file       *os.File
 	compressor io.WriteCloser
@@ -100,14 +104,14 @@ func (o *outWriter) Write(p []byte) (n int, err error) {
 }
 
 func (o *outWriter) Close() error {
-	if nil != o.file {
+	if nil == o.file {
 		return nil
 	}
 	_ = o.compressor.Close()
-	err := o.file.Close()
+	_ = o.file.Close()
 	o.compressor = nil
 	o.file = nil
-	return err
+	return nil
 }
 
 func newOutWriter(filename string, compressType int) (io.Writer, error) {

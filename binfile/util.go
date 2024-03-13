@@ -25,7 +25,11 @@ func CloneBytes(src []byte) []byte {
 	return []byte{}
 }
 
-func closeWriter(closer io.Closer, msg string) {
+func closeWriter(w io.Writer, msg string) {
+	closer, ok := w.(io.Closer)
+	if !ok {
+		return
+	}
 	err := closer.Close()
 	if err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "%s close error: %v\n", msg, err)

@@ -42,9 +42,11 @@ func NewBinReader(filename string, compressType int) (BinReader, error) {
 }
 
 type ReadOption struct {
-	Offset int64 `json:"start offset"`
-	Limit  int32 `help:"number of document to read, -1 to read all"`
-	Step   int32 `json:"document read interval"`
+	Offset      int64  `help:"start offset"`
+	Limit       int32  `help:"number of document to read, -1 to read all"`
+	Step        int32  `help:"document read interval"`
+	OutCompress int    `help:"output compress mode, only works when output not empty"`
+	Output      string `help:"output filename"`
 }
 
 type SearchOption struct {
@@ -92,8 +94,14 @@ func (br *binReader) close() {
 // ReadDocs doc at specified position
 func (br *binReader) ReadDocs(opt *ReadOption) {
 	var doc *Doc
+	w, err := newOutWriter(opt.Output, opt.OutCompress)
+	if err != nil {
+		errorf("%v", err)
+		return
+	}
+	defer closeWriter(w, "close output")
 	offset := opt.Offset
-	err := br.resetOffset(offset)
+	err = br.resetOffset(offset)
 	if err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "seek position error: %v\n", err)
 		return
@@ -109,9 +117,9 @@ func (br *binReader) ReadDocs(opt *ReadOption) {
 			return
 		}
 		if Verbose {
-			fmt.Printf("%-20s\t%s\n", string(doc.Key), string(doc.Content))
+			_, _ = fmt.Fprintf(w, "%-20s\t%s\n", string(doc.Key), string(doc.Content))
 		} else {
-			fmt.Println(string(doc.Content))
+			_, err = fmt.Fprintln(w, string(doc.Content))
 		}
 		if opt.Limit > 0 {
 			count -= 1

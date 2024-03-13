@@ -38,7 +38,7 @@ func Repack(opt RepackCmd) error {
 			split:      opt.Split,
 			idx:        atomic.Int32{},
 		}
-		// no decompress and compression when input and output are the same
+		// no decompress and compression when input and outWriter are the same
 		if r.st == r.tt {
 			r.tt = NONE
 			r.st = NONE
@@ -58,7 +58,7 @@ func Repack(opt RepackCmd) error {
 			split:  opt.Split,
 			pos:    atomic.Int64{},
 		}
-		// no decompress and compression when input and output are the same
+		// no decompress and compression when input and outWriter are the same
 		if r.st == r.tt {
 			r.tt = NONE
 			r.st = NONE
