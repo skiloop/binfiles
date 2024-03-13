@@ -44,7 +44,7 @@ func searchFiles(root string, ch, stop chan interface{}, pattern *regexp.Regexp)
 		ch <- nil
 	}()
 	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
+		if err != nil || d.IsDir() {
 			// root will not be dir if err is not nil
 			// stopCh processing dir if read dir error
 			debug("skip processing dir %s: %v\n", path, err)
