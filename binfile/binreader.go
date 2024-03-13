@@ -91,12 +91,16 @@ func (br *binReader) close() {
 
 // ReadDocs doc at specified position
 func (br *binReader) ReadDocs(opt *ReadOption) {
-	var err error
 	var doc *Doc
-	count := opt.Limit
 	offset := opt.Offset
+	err := br.resetOffset(offset)
+	if err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "seek position error: %v\n", err)
+		return
+	}
+	count := opt.Limit
 	for {
-		doc, err = br.Read(offset, true)
+		doc, err = br.docSeeker.Read(true)
 		if err == io.EOF {
 			break
 		}
@@ -115,19 +119,25 @@ func (br *binReader) ReadDocs(opt *ReadOption) {
 				break
 			}
 		}
-		br.skipDocs(opt.Step)
+		if err = br.skipDocs(opt.Step); err != nil {
+			_, _ = fmt.Fprintf(os.Stderr, "skip docs error: %v\n", err)
+			break
+		}
 	}
 }
 
-func (br *binReader) skipDocs(count int32) {
-	var err error
+func (br *binReader) skipDocs(count int32) (err error) {
 	for count > 0 {
 		err = br.skipNext()
 		if err != nil {
+			if err == io.EOF {
+				err = nil
+			}
 			break
 		}
 		count -= 1
 	}
+	return
 }
 
 // Count how many documents in file start from offset
@@ -264,7 +274,7 @@ func (br *binReader) List(opt *ReadOption, keyOnly bool) {
 		}
 		fmt.Println(msg)
 		docPos = curPos
-		br.skipDocs(opt.Step)
+		_ = br.skipDocs(opt.Step)
 	}
 	if !keyOnly {
 		fmt.Printf("total %d\n", count)
