@@ -8,6 +8,7 @@ import (
 	"github.com/pierrec/lz4"
 	"github.com/ulikunitz/xz"
 	"io"
+	"os"
 )
 
 var Verbose = false
@@ -87,4 +88,40 @@ func debug(format string, a ...any) {
 	if Debug {
 		fmt.Printf(format, a...)
 	}
+}
+
+type outWriter struct {
+	file       *os.File
+	compressor io.WriteCloser
+}
+
+func (o *outWriter) Write(p []byte) (n int, err error) {
+	return o.compressor.Write(p)
+}
+
+func (o *outWriter) Close() error {
+	if nil != o.file {
+		return nil
+	}
+	_ = o.compressor.Close()
+	err := o.file.Close()
+	o.compressor = nil
+	o.file = nil
+	return err
+}
+
+func newOutWriter(filename string, compressType int) (io.Writer, error) {
+	if filename == "" {
+		return os.Stdout, nil
+	}
+	file, err := os.OpenFile(filename, writerFileFlag, 0644)
+	if err != nil {
+		return nil, err
+	}
+	compressor, err := getCompressWriter(compressType, file)
+	if err != nil {
+		_ = file.Close()
+		return nil, err
+	}
+	return &outWriter{file: file, compressor: compressor}, nil
 }
