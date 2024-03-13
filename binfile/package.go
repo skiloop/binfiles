@@ -47,7 +47,7 @@ func searchFiles(root string, ch, stop chan interface{}, pattern *regexp.Regexp)
 		if err != nil {
 			// root will not be dir if err is not nil
 			// stopCh processing dir if read dir error
-			fmt.Printf("skip processing dir %s: %v\n", path, err)
+			debug("skip processing dir %s: %v\n", path, err)
 			return fs.SkipDir
 		}
 		// process only regular files (d is not nil if err is nil)
