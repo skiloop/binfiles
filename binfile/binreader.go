@@ -107,6 +107,17 @@ func (br *binReader) ReadDocs(opt *ReadOption) {
 		return
 	}
 	count := opt.Limit
+	if opt.Output != "" {
+		defer func() {
+			if err != nil {
+				off, er := br.docSeeker.Seek(0, io.SeekCurrent)
+				if er != nil {
+					_, _ = fmt.Fprintf(os.Stderr, "last read postion: %d\n", off)
+				}
+			}
+		}()
+	}
+
 	for {
 		doc, err = br.docSeeker.Read(true)
 		if err == io.EOF {
