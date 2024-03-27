@@ -111,7 +111,7 @@ func (br *binReader) ReadDocs(opt *ReadOption) {
 		defer func() {
 			if err != nil {
 				off, er := br.docSeeker.Seek(0, io.SeekCurrent)
-				if er != nil {
+				if er == nil {
 					_, _ = fmt.Fprintf(os.Stderr, "last read postion: %d\n", off)
 				}
 			}
