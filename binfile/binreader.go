@@ -214,7 +214,7 @@ func (br *binReader) simpleCount(start, end int64, no int, verboseStep uint32) (
 		Offset:  start,
 		Pattern: "",
 		KeySize: int(KeySizeLimit),
-		DocSize: MAX_DOC_SIZE,
+		DocSize: MaxDocSize,
 		End:     end,
 	})
 	if doc == nil {
