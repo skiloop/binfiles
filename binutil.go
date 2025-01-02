@@ -12,31 +12,35 @@ import (
 )
 
 type ListCmd struct {
-	Input   string `arg:"" help:"input file name"`
-	Offset  int64  `arg:"" optional:"" help:"start document position" default:"0"`
-	KeyOnly bool   `short:"k" help:"list key only" default:"false"`
-	Limit   int32  `short:"l" help:"limit of list number, 0 means unlimited" default:"0"`
+	Input     string `arg:"" help:"input file name"`
+	Offset    int64  `arg:"" optional:"" help:"start document position" default:"0"`
+	KeyOnly   bool   `short:"k" help:"list key only" default:"false"`
+	Limit     int32  `short:"l" help:"limit of list number, 0 means unlimited" default:"0"`
+	SkipError bool   `help:"skip error docs and continue reading" default:"false"`
 }
 
 type ReadCmd struct {
-	Input   string `arg:"" help:"input file name"`
-	Offset  int64  `arg:"" optional:"" help:"start position" default:"0"`
-	Output  string `short:"o" help:"output file name, empty to std output" default:""`
-	OutType string `short:"c" help:"output compression type, only works when output not empty" enum:"gzip,bz2,xz,br,brotli,lz4,none" default:"none"`
-	Limit   int32  `short:"l" help:"number of documents to read, 0 means read all" default:"1"`
+	Input     string `arg:"" help:"input file name"`
+	Offset    int64  `arg:"" optional:"" help:"start position" default:"0"`
+	Output    string `short:"o" help:"output file name, empty to std output" default:""`
+	OutType   string `short:"c" help:"output compression type, only works when output not empty" enum:"gzip,bz2,xz,br,brotli,lz4,none" default:"none"`
+	Limit     int32  `short:"l" help:"number of documents to read, 0 means read all" default:"1"`
+	SkipError bool   `help:"skip error docs and continue reading" default:"false"`
 }
 
 type CountCmd struct {
 	Input       string `arg:"" help:"input file name"`
 	Offset      int64  `arg:"" optional:"" help:"start position" default:"0"`
 	WorkerCount int    `short:"w" help:"number of workers, when 0 or negative number of system processors will be used" default:"0"`
+	SkipError   bool   `help:"skip error docs and continue reading" default:"false"`
 }
 
 type SearchCmd struct {
-	Input  string `arg:"" help:"input file name"`
-	Key    string `arg:"" help:"key to search, regex supported"`
-	Pretty bool   `short:"p" help:"value is a json, and pretty output when found" default:"false"`
-	Offset int64  `arg:"" optional:"" help:"position to search from" default:"0"`
+	Input       string `arg:"" help:"input file name"`
+	Key         string `arg:"" help:"key to search, regex supported"`
+	Pretty      bool   `short:"p" help:"value is a json, and pretty output when found" default:"false"`
+	Offset      int64  `arg:"" optional:"" help:"position to search from" default:"0"`
+	NoSkipError bool   `help:"continue searching when encounter invalid doc" default:"false"`
 }
 
 type SeekCmd struct {
@@ -95,9 +99,10 @@ func newWriter(filename string, compress string) binfile.BinWriter {
 
 func listDocs(br binfile.BinReader) {
 	opt := binfile.ReadOption{
-		Offset: client.List.Offset,
-		Limit:  client.List.Limit,
-		Step:   client.Step,
+		Offset:    client.List.Offset,
+		Limit:     client.List.Limit,
+		Step:      client.Step,
+		SkipError: client.List.SkipError,
 	}
 	br.List(&opt, client.List.KeyOnly)
 }
@@ -110,6 +115,7 @@ func readDocs(br binfile.BinReader) {
 		Step:        client.Step,
 		OutCompress: binfile.CompressTypes[client.Read.OutType],
 		Output:      client.Read.Output,
+		SkipError:   client.Read.SkipError,
 	}
 	br.ReadDocs(&opt)
 }
@@ -122,7 +128,7 @@ func countDocs(br binfile.BinReader) {
 	} else {
 		step = uint32(client.Step)
 	}
-	count := br.Count(client.Count.Offset, client.Count.WorkerCount, step)
+	count := br.Count(client.Count.Offset, client.Count.WorkerCount, step, client.Count.SkipError)
 	if count >= 0 {
 		fmt.Printf("%d\n", count)
 	}
@@ -138,7 +144,12 @@ func JsonPrettify(content []byte) (error, *bytes.Buffer) {
 }
 
 func searchDocs(br binfile.BinReader) {
-	opt := binfile.SearchOption{Key: client.Search.Key, Offset: client.Search.Offset, Number: int(client.Step)}
+	opt := binfile.SearchOption{
+		Key:       client.Search.Key,
+		Offset:    client.Search.Offset,
+		Number:    int(client.Step),
+		SkipError: !client.Search.NoSkipError,
+	}
 	if binfile.Verbose {
 		fmt.Printf("Key   : %s\n", opt.Key)
 		fmt.Printf("Offset: %d\n", opt.Offset)
