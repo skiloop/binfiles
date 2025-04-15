@@ -51,7 +51,10 @@ func (p *pathRepack) pack(filename string) (err error) {
 		_, _ = fmt.Fprintf(os.Stderr, "file already exists: %s\n", dst)
 		return ErrFileExists
 	}
-	bw := NewCCBinWriter(dst, p.pt, p.tt)
+	bw, err := NewCCBinWriter(dst, p.pt, p.tt)
+	if err != nil {
+		return err
+	}
 
 	if err = bw.Open(); err != nil {
 		return err

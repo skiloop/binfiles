@@ -67,8 +67,11 @@ func (r *docRepack) merge() {
 		r.stopCh <- nil
 	}()
 
-	bw := NewCCBinWriter(r.target, r.pt, r.tt)
-	var err error
+	bw, err := NewCCBinWriter(r.target, r.pt, r.tt)
+	if err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "NewCCBinWriter failed  %s: %v\n", bw.Filename(), err)
+		return
+	}
 	if err = bw.Open(); err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "fail to open %s: %v\n", bw.Filename(), err)
 		return
