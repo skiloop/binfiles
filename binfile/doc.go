@@ -99,7 +99,9 @@ func Decompress(doc *Doc, compressType int) (dst *Doc, err error) {
 	}
 	reader, err := getDecompressReader(compressType, bytes.NewReader(doc.Content))
 	if err != nil || reader == nil {
-		_, _ = fmt.Fprintf(os.Stderr, "decompressor error: %v\n", err)
+		if Verbose {
+			_, _ = fmt.Fprintf(os.Stderr, "decompressor error: %v\n", err)
+		}
 		return nil, ErrDecompressReader
 	}
 

@@ -147,7 +147,7 @@ func (br *binReader) ReadDocs(opt *ReadOption) {
 		} else {
 			_, err = fmt.Fprintln(w, string(doc.Content))
 		}
-		if opt.Limit > 0 {
+		if (err == nil || !opt.SkipError) && opt.Limit > 0 {
 			count -= 1
 			if count <= 0 {
 				break
@@ -160,6 +160,7 @@ func (br *binReader) ReadDocs(opt *ReadOption) {
 	}
 }
 
+// skipDocs skip next N valid docs
 func (br *binReader) skipDocs(count int32) (err error) {
 	for count > 0 {
 		err = br.skipNext()
@@ -167,7 +168,10 @@ func (br *binReader) skipDocs(count int32) (err error) {
 			if err == io.EOF {
 				err = nil
 			}
-			break
+			_, doc := br.next(-1, -1, -1, -1, nil)
+			if doc == nil {
+				break
+			}
 		}
 		count -= 1
 	}
@@ -389,6 +393,7 @@ func (br *binReader) Search(opt SearchOption) int64 {
 	return found
 }
 
+// skipNext skip next doc, include invalid doc
 func (br *binReader) skipNext() (err error) {
 
 	var offset int64
