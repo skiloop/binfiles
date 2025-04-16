@@ -212,7 +212,7 @@ func (br *binReader) Count(offset int64, nThreads int, verboseStep uint32, skipE
 
 // count concurrently
 func (br *binReader) conCount(ch chan int64, start, end int64, no int, verboseStep uint32, skipError bool) {
-
+	// TODO: fix concurrent count error: count mismatch
 	brd, err := NewBinReader(br.filename, br.docSeeker.CompressType())
 	if err != nil {
 		ch <- 0
