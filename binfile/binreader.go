@@ -244,7 +244,7 @@ func (br *binReader) simpleCount(start, end int64, no int, verboseStep uint32, s
 		if end != -1 {
 			fmt.Printf("[%d] count how many documents from position %d to %d\n", no, start, end)
 		} else {
-			fmt.Printf("[%d] count how many documents from position %d to workerEndFlag\n", no, start)
+			fmt.Printf("[%d] count how many documents from position %d to end\n", no, start)
 		}
 		fmt.Printf("[%d] start doc position: %d\n", no, curPos)
 	}
@@ -287,6 +287,9 @@ func (br *binReader) simpleCount(start, end int64, no int, verboseStep uint32, s
 	if err != nil && err != io.EOF {
 		_, _ = fmt.Fprintf(os.Stderr, "\n[%d] read doc error at %d\n%v", no, curPos, err)
 		return -1
+	}
+	if Verbose {
+		fmt.Printf("[%d] got %10d documents from %20d to position %20d\n", no, count, start, curPos)
 	}
 	return count
 }
@@ -470,7 +473,7 @@ func (br *binReader) next(start, end int64, keySize, docSize int, regex *regexp.
 		}
 	}
 	if err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "%v\n", err)
+		_, _ = fmt.Fprintf(os.Stderr, "seek next error: %v\n", err)
 		return -1, nil
 	}
 	return pos, doc

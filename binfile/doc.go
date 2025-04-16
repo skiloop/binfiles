@@ -12,12 +12,12 @@ import (
 
 var (
 	ErrDecompressReader = errors.New("fail to get decompress reader")
-	ErrCompressWriter   = errors.New("fail to get compress writer")
-	ErrValueDecompress  = errors.New("value decompress error")
-	ErrInvalidKey       = errors.New("invalid key")
-	ErrReadKey          = errors.New("key read error")
-	ErrReadDoc          = errors.New("doc read error")
-	ErrFileExists       = errors.New("file already exists")
+	//ErrCompressWriter   = errors.New("fail to get compress writer")
+	ErrValueDecompress = errors.New("value decompress error")
+	ErrInvalidKey      = errors.New("invalid key")
+	ErrReadKey         = errors.New("key read error")
+	ErrReadDoc         = errors.New("doc read error")
+	ErrFileExists      = errors.New("file already exists")
 	//ErrNotSupport      = errors.New("not support for this compression type")
 )
 
@@ -73,17 +73,18 @@ func ReadDoc(r io.Reader, doc *Doc) (int, error) {
 	return nr, nil
 }
 
-func readBytes(r io.Reader, size int) ([]byte, error) {
-	keyBuf := make([]byte, size)
-	n, err := r.Read(keyBuf)
-	if err != nil {
-		return nil, err
-	}
-	if n != size {
-		return nil, ErrReadKey
-	}
-	return keyBuf, nil
-}
+//
+//func readBytes(r io.Reader, size int) ([]byte, error) {
+//	keyBuf := make([]byte, size)
+//	n, err := r.Read(keyBuf)
+//	if err != nil {
+//		return nil, err
+//	}
+//	if n != size {
+//		return nil, ErrReadKey
+//	}
+//	return keyBuf, nil
+//}
 
 func readInt32(r io.Reader, num *int32) (int, error) {
 	err := binary.Read(r, binary.LittleEndian, num)
@@ -93,14 +94,14 @@ func readInt32(r io.Reader, num *int32) (int, error) {
 	return int(unsafe.Sizeof(*num)), nil
 }
 
-func Decompress(doc *Doc, compressType int) (dst *Doc, err error) {
+func Decompress(doc *Doc, compressType int, verbose bool) (dst *Doc, err error) {
 	if NONE == compressType {
 		return doc, nil
 	}
 	reader, err := getDecompressReader(compressType, bytes.NewReader(doc.Content))
 	if err != nil || reader == nil {
 		if Verbose {
-			_, _ = fmt.Fprintf(os.Stderr, "decompressor error: %v\n", err)
+			_, _ = fmt.Fprintf(os.Stderr, "decompressor reader creation error: %v\n", err)
 		}
 		return nil, ErrDecompressReader
 	}
@@ -108,7 +109,9 @@ func Decompress(doc *Doc, compressType int) (dst *Doc, err error) {
 	var data []byte
 	data, err = io.ReadAll(reader)
 	if err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "%v\n", err)
+		if verbose {
+			_, _ = fmt.Fprintf(os.Stderr, "decompress error: %v\n", err)
+		}
 		return nil, ErrValueDecompress
 	}
 	return &Doc{Key: CloneBytes(doc.Key), Content: data}, nil
