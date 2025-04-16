@@ -275,8 +275,8 @@ func (br *binReader) simpleCount(start, end int64, no int, verboseStep uint32, s
 				nextVerbose = nextVerbose + verboseStep
 			}
 		}
-		curPos, err = br.docSeeker.Seek(0, 1)
-		if err == io.EOF || end >= 0 && curPos > end {
+		curPos, err = br.docSeeker.Seek(0, io.SeekCurrent)
+		if err == io.EOF || end >= 0 && curPos >= end {
 			break
 		}
 		if err != nil {
