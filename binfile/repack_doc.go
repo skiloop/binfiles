@@ -110,6 +110,8 @@ func (r *docRepack) start(workerCount int) (err error) {
 	r.step = int64(math.Ceil(float64(r.fileSize) / float64(workerCount)))
 	go r.merge()
 	workers.RunJobs(workerCount, nil, r.worker, nil)
+	// tell merger to finish
+	r.docCh <- nil
 	<-r.stopCh
 	return nil
 }

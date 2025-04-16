@@ -69,19 +69,20 @@ func (dw *binWriter) Open() error {
 
 func (dw *binWriter) lock() error {
 	dw.mu.Lock()
+	defer dw.mu.Unlock()
 	err := filelock.Lock(*dw.file)
 	if err == nil {
 		return nil
 	}
-	dw.mu.Unlock()
 	return err
 }
 
 func (dw *binWriter) unlock() error {
 	dw.mu.Lock()
+	defer dw.mu.Unlock()
 	err := filelock.UnLock(*dw.file)
+
 	if err == nil {
-		dw.mu.Unlock()
 		return nil
 	}
 	return err
