@@ -246,6 +246,7 @@ func (br *binReader) simpleCount(start, end int64, no int, verboseStep uint32, s
 		} else {
 			fmt.Printf("[%d] count how many documents from position %d to workerEndFlag\n", no, start)
 		}
+		fmt.Printf("[%d] start doc position: %d\n", no, curPos)
 	}
 	var err error
 	count += 1
@@ -275,7 +276,7 @@ func (br *binReader) simpleCount(start, end int64, no int, verboseStep uint32, s
 				nextVerbose = nextVerbose + verboseStep
 			}
 		}
-		curPos, err = br.docSeeker.Seek(0, io.SeekCurrent)
+		curPos, err = br.current()
 		if err == io.EOF || end >= 0 && curPos >= end {
 			break
 		}
