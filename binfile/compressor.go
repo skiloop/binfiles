@@ -1,6 +1,7 @@
 package binfile
 
 import (
+	"bytes"
 	"compress/gzip"
 	"github.com/andybalholm/brotli"
 	"github.com/dsnet/compress/bzip2"
@@ -68,4 +69,23 @@ func getCompressor(compressType int, w io.Writer) (Compressor, error) {
 	}
 	return _compressor{w: writer}, nil
 	//return nil, errors.New(fmt.Sprintf("unknown package compression type %d", compressType))
+}
+
+func Compress(data []byte, compressType int) ([]byte, error) {
+
+	buf := &bytes.Buffer{}
+	w, err := getCompressor(compressType, buf)
+
+	if nil != err {
+		return nil, err
+	}
+	_, err = w.Write(data)
+	if err != nil {
+		return nil, err
+	}
+	err = w.Close()
+	if err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
 }

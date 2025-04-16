@@ -14,13 +14,6 @@ func (w NoneCompressWriter) Write(p []byte) (int, error) {
 	return w.dst.Write(p)
 }
 
-func (w NoneCompressWriter) Close() error {
-	if wr, ok := w.dst.(io.WriteCloser); ok {
-		_ = wr.Close()
-	}
-	return nil
-}
-
 func NewNoneCompressWriter(dst io.Writer) *NoneCompressWriter {
 	return &NoneCompressWriter{dst: dst}
 }

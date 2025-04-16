@@ -233,7 +233,9 @@ func execWriteCmd(filename string, worker func(reader binfile.BinWriter)) {
 		_, _ = fmt.Fprintf(os.Stderr, "file not found: %s\n", filename)
 		return
 	}
-	defer bw.Close()
+	defer func() {
+		_ = bw.Close()
+	}()
 	worker(bw)
 }
 

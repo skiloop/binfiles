@@ -147,7 +147,7 @@ func (r *fileRepack) worker(no int) {
 
 		if r.split > 0 && count%int64(r.split) == 0 {
 			fmt.Printf("[%d] %s done with %d docs\n", no, rp.Filename(), docs)
-			rp.Close()
+			_ = rp.Close()
 			r.filenameCh <- rp.Filename()
 			rp = r.nextBinWriter()
 			err = rp.Open()
@@ -160,7 +160,7 @@ func (r *fileRepack) worker(no int) {
 	}
 	count -= int64(init)
 	fmt.Printf("[%d] %s done with %d docs\n", no, rp.Filename(), docs)
-	rp.Close()
+	_ = rp.Close()
 	fmt.Printf("[%d]fileWorker done with %d docs\n", no, count)
 }
 
