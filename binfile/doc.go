@@ -114,24 +114,15 @@ func Decompress(doc *Doc, compressType int) (dst *Doc, err error) {
 	return &Doc{Key: CloneBytes(doc.Key), Content: data}, nil
 }
 
-func Compress(doc *Doc, compressType int) (dst *Doc, err error) {
+func CompressDoc(doc *Doc, compressType int) (dst *Doc, err error) {
 	if NONE == compressType {
 		return doc, nil
 	}
-	buf := bytes.Buffer{}
-	writer, err := getCompressWriter(compressType, &buf)
+	buf, err := Compress(doc.Content, compressType)
 	if err != nil {
 		return nil, err
 	}
-
-	_, err = writer.Write(doc.Content)
-	if err != nil {
-		return nil, err
-	}
-	if err = writer.Close(); err != nil {
-		return nil, err
-	}
-	return &Doc{Key: CloneBytes(doc.Key), Content: buf.Bytes()}, nil
+	return &Doc{Key: CloneBytes(doc.Key), Content: buf}, nil
 }
 
 // writeDoc Write document to writer

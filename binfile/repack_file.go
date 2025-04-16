@@ -74,7 +74,7 @@ func (r *fileRepack) merge(stopCh chan interface{}) {
 	}
 	defer closeWriter(fw, r.target)
 
-	cw, err := getCompressWriter(r.pt, fw)
+	cw, err := getCompressor(r.pt, fw)
 	if err != nil {
 		return
 	}
