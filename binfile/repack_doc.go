@@ -10,18 +10,24 @@ import (
 )
 
 type docRepack struct {
-	docCh    chan *Doc
-	stopCh   chan interface{}
-	limit    int
-	source   string
-	target   string
-	pt       int
-	tt       int
-	st       int
-	split    int
-	fileSize int64
-	pos      atomic.Int64
-	step     int64
+	docCh       chan *Doc
+	stopCh      chan interface{}
+	limit       int
+	source      string
+	target      string
+	contentOnly bool
+	pt          int
+	tt          int
+	st          int
+	split       int
+	fileSize    int64
+	pos         atomic.Int64
+	step        int64
+}
+
+type DocWriterCloser interface {
+	DocWriter
+	io.Closer
 }
 
 func (r *docRepack) worker(no int) {
@@ -61,21 +67,37 @@ func (r *docRepack) worker(no int) {
 	fmt.Printf("[%d] worker done with %d documents\n", no, count)
 
 }
+func (r *docRepack) createWriter() (DocWriterCloser, error) {
+	if r.contentOnly {
+		bw := newConDocFileWriter(r.target, r.pt)
+		if err := bw.Open(); err != nil {
+			return nil, err
+		}
+		return bw, nil
+	}
+	bw, err := NewCCBinWriter(r.target, r.pt, r.tt)
+	if err != nil {
+		return nil, err
+	}
+	if err = bw.Open(); err != nil {
+		return nil, err
+	}
+	return bw, nil
+}
 
 func (r *docRepack) merge() {
 	defer func() {
 		r.stopCh <- nil
 	}()
 
-	bw, err := NewCCBinWriter(r.target, r.pt, r.tt)
+	bw, err := r.createWriter()
 	if err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "NewCCBinWriter failed  %s: %v\n", r.target, err)
+		_, _ = fmt.Fprintf(os.Stderr, "fail to create writer: %v\n", err)
 		return
 	}
-	if err = bw.Open(); err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "fail to open %s: %v\n", bw.Filename(), err)
-		return
-	}
+	defer func() {
+		_ = bw.Close()
+	}()
 
 	count := 0
 	for {

@@ -14,6 +14,7 @@ type RepackCmd struct {
 	Split               int    `help:"max number of package, no limit if 0" default:"0"`
 	Limit               int    `help:"max number of docs, no limit if 0" default:"0"`
 	Pattern             string `short:"p" help:"file name pattern for path mode"`
+	ContentOnly         bool   `short:"o" help:"write content only, target compress type will have no effect" default:"false"`
 	Mode                string `short:"m" help:"mode of repack, doc for worker on reading doc, file for on packaging, path for multiple files and source and target are directory" enum:"file,doc,path" default:"file"`
 	SourceCompressType  string `short:"i" help:"source bin compression type" enum:"gzip,bzip2,bz2,br,brotli,none" default:"gzip"`
 	TargetCompressType  string `short:"t" help:"target bin compression type" enum:"gzip,bzip2,bz2,br,brotli,none" default:"none"`
@@ -24,6 +25,7 @@ const workerEndFlag = ""
 
 // Repack bin file
 func Repack(opt RepackCmd) error {
+	// repack with multiple workers to read docs from different files
 	if opt.Mode == "file" {
 		r := fileRepack{
 			docCh:      make(chan *Doc, opt.Workers+3),
@@ -45,18 +47,20 @@ func Repack(opt RepackCmd) error {
 		}
 		return r.start(opt.Source, opt.Workers)
 	}
+	// repack using multiple workers on reading docs from the same file
 	if opt.Mode == "doc" {
 		r := docRepack{
-			docCh:  make(chan *Doc, opt.Workers+3),
-			stopCh: make(chan interface{}),
-			limit:  opt.Limit,
-			source: opt.Source,
-			target: opt.Target,
-			pt:     CompressTypes[opt.PackageCompressType],
-			tt:     CompressTypes[opt.TargetCompressType],
-			st:     CompressTypes[opt.SourceCompressType],
-			split:  opt.Split,
-			pos:    atomic.Int64{},
+			docCh:       make(chan *Doc, opt.Workers+3),
+			stopCh:      make(chan interface{}),
+			limit:       opt.Limit,
+			contentOnly: opt.ContentOnly,
+			source:      opt.Source,
+			target:      opt.Target,
+			pt:          CompressTypes[opt.PackageCompressType],
+			tt:          CompressTypes[opt.TargetCompressType],
+			st:          CompressTypes[opt.SourceCompressType],
+			split:       opt.Split,
+			pos:         atomic.Int64{},
 		}
 		// no decompress and compression when input and outWriter are the same
 		if r.st == r.tt {
