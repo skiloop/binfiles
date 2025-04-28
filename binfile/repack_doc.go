@@ -41,24 +41,24 @@ func (r *docRepack) worker(no int) {
 	}
 	reader, _ := br.(*binReader)
 	count := 0
-	offset, doc := reader.Next(&SeekOption{
-		Offset:  offset,
-		Pattern: "",
-		KeySize: int(KeySizeLimit),
-		DocSize: -1,
-		End:     -1,
-	})
-	if doc == nil || offset >= end {
-		return
-	}
+	var doc *Doc
 	_ = reader.resetOffset(offset)
 	for {
 		doc, err = reader.docSeeker.Read(true)
 		if err != nil {
-			break
+			pos, dc := reader.next(offset, -1, -1, -1, nil)
+			if dc == nil {
+				fmt.Printf("[%d] no more doc after %d\n", no, offset)
+				break
+			}
+			offset, doc = pos, dc
+		} else {
+			offset, err = reader.docSeeker.Seek(0, io.SeekCurrent)
+			if err != nil {
+				break
+			}
 		}
-		offset, err = reader.docSeeker.Seek(0, io.SeekCurrent)
-		if err != nil || offset > end {
+		if offset > end {
 			break
 		}
 		r.docCh <- doc
