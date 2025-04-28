@@ -50,8 +50,6 @@ func Repack(opt RepackCmd) error {
 	// repack using multiple workers on reading docs from the same file
 	if opt.Mode == "doc" {
 		r := docRepack{
-			docCh:       make(chan *Doc, opt.Workers+3),
-			stopCh:      make(chan interface{}),
 			limit:       opt.Limit,
 			contentOnly: opt.ContentOnly,
 			source:      opt.Source,

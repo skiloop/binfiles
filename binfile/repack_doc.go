@@ -46,7 +46,7 @@ func (r *docRepack) worker(no int) {
 	for {
 		doc, err = reader.docSeeker.Read(true)
 		if err != nil {
-			pos, dc := reader.next(offset, -1, -1, -1, nil)
+			pos, dc := reader.next(offset, end, -1, -1, nil)
 			if dc == nil {
 				fmt.Printf("[%d] no more doc after %d\n", no, offset)
 				break
@@ -61,8 +61,16 @@ func (r *docRepack) worker(no int) {
 		if offset > end {
 			break
 		}
-		r.docCh <- doc
-		count += 1
+		// Safely send to the channel
+		select {
+		case r.docCh <- doc:
+			count++
+		case <-r.stopCh: // Handle stop signal
+			fmt.Printf("[%d] worker stopped\n", no)
+			// tell other workers to stop
+			r.stopCh <- nil
+			break
+		}
 	}
 	fmt.Printf("[%d] worker done with %d documents\n", no, count)
 
@@ -86,9 +94,6 @@ func (r *docRepack) createWriter() (DocWriterCloser, error) {
 }
 
 func (r *docRepack) merge() {
-	defer func() {
-		r.stopCh <- nil
-	}()
 
 	bw, err := r.createWriter()
 	if err != nil {
@@ -98,10 +103,19 @@ func (r *docRepack) merge() {
 	defer func() {
 		_ = bw.Close()
 	}()
-
+	defer func() {
+		r.stopCh <- nil
+	}()
+	fmt.Println("merger starts")
 	count := 0
+	var doc *Doc
 	for {
-		doc := <-r.docCh
+		select {
+		case doc = <-r.docCh:
+		case <-r.stopCh:
+			fmt.Printf("merger got stop signal")
+			break
+		}
 		if doc == nil {
 			break
 		}
@@ -124,12 +138,16 @@ func getFileSize(filename string) (int64, error) {
 }
 
 func (r *docRepack) start(workerCount int) (err error) {
-
+	// set step
 	r.fileSize, err = getFileSize(r.source)
 	if err != nil {
 		return err
 	}
 	r.step = int64(math.Ceil(float64(r.fileSize) / float64(workerCount)))
+	// create channel
+	r.docCh = make(chan *Doc, workerCount+3)
+	r.stopCh = make(chan interface{})
+	// start run
 	go r.merge()
 	workers.RunJobs(workerCount, nil, r.worker, nil)
 	// tell merger to finish
