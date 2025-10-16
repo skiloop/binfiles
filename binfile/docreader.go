@@ -11,8 +11,9 @@ type DocReader interface {
 }
 
 type docReader struct {
-	r            io.Reader
-	compressType int
+	r             io.Reader
+	compressType  int
+	docCompressor DocCompressor
 }
 
 func (dr *docReader) Close() error {
@@ -34,11 +35,11 @@ func (dr *docReader) Read(decompress bool) (doc *Doc, err error) {
 		return nil, err
 	}
 	if decompress && len(doc.Content) > 0 {
-		return Decompress(doc, dr.compressType, true)
+		return dr.docCompressor.Decompress(doc, dr.compressType, true)
 	}
 	return doc, nil
 }
 
 func NewDocReader(reader io.Reader, compressType int) DocReader {
-	return &docReader{r: reader, compressType: compressType}
+	return &docReader{r: reader, compressType: compressType, docCompressor: &OptimizedDocCompressor{}}
 }

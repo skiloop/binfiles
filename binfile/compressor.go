@@ -3,11 +3,12 @@ package binfile
 import (
 	"bytes"
 	"compress/gzip"
+	"io"
+
 	"github.com/andybalholm/brotli"
 	"github.com/dsnet/compress/bzip2"
 	"github.com/pierrec/lz4"
 	"github.com/ulikunitz/xz"
-	"io"
 )
 
 type flusher interface {
@@ -72,7 +73,12 @@ func getCompressor(compressType int, w io.Writer) (Compressor, error) {
 }
 
 func Compress(data []byte, compressType int) ([]byte, error) {
+	// 使用内存池优化
+	return GlobalMemoryPool.CompressWithPool(data, compressType)
+}
 
+// CompressOriginal 原始的压缩实现，保留作为备用
+func CompressOriginal(data []byte, compressType int) ([]byte, error) {
 	buf := &bytes.Buffer{}
 	w, err := getCompressor(compressType, buf)
 

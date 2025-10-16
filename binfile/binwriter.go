@@ -3,10 +3,11 @@ package binfile
 import (
 	"errors"
 	"fmt"
-	"github.com/skiloop/binfiles/binfile/filelock"
 	"io"
 	"os"
 	"sync"
+
+	"github.com/skiloop/binfiles/binfile/filelock"
 )
 
 var errWorkersStopped = errors.New("workers stopped")
@@ -31,16 +32,24 @@ func NewBinWriter(filename string, compressType int) BinWriter {
 }
 
 type binWriter struct {
-	filename     string
-	compressType int
-	file         *os.File
-	mu           sync.Mutex
-	docWriter    DocWriter
+	filename      string
+	compressType  int
+	file          *os.File
+	mu            sync.Mutex
+	writer        io.Writer
+	docCompressor DocCompressor
 }
 
 func createBinWriter(filename string, compressType int) *binWriter {
 
-	return &binWriter{filename: filename, compressType: compressType, file: nil, mu: sync.Mutex{}}
+	return &binWriter{
+		filename:      filename,
+		compressType:  compressType,
+		file:          nil,
+		mu:            sync.Mutex{},
+		writer:        nil,
+		docCompressor: &OptimizedDocCompressor{},
+	}
 }
 
 func (dw *binWriter) Filename() string {
@@ -63,7 +72,7 @@ func (dw *binWriter) Open() error {
 		return err
 	}
 	dw.file = file
-	dw.docWriter = NewDocWriter(dw.file)
+	dw.writer = dw.file
 	return nil
 }
 
@@ -92,10 +101,11 @@ func (dw *binWriter) Write(doc *Doc) (int, error) {
 	if dw.file == nil {
 		return 0, errors.New("not opened yet")
 	}
-	compressedDoc, err := CompressDoc(doc, dw.compressType)
+	compressedDoc, err := dw.docCompressor.CompressDoc(doc, dw.compressType)
 	if err != nil {
 		return 0, err
 	}
+	fmt.Printf("write doc: %s, %d -> %d\n", string(compressedDoc.Key), len(doc.Content), len(compressedDoc.Content))
 	if err = dw.lock(); err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "lock file error: %v\n", err)
 		return 0, err
@@ -103,7 +113,7 @@ func (dw *binWriter) Write(doc *Doc) (int, error) {
 	defer func() {
 		_ = dw.unlock()
 	}()
-	return dw.docWriter.Write(compressedDoc)
+	return compressedDoc.writeDoc(dw.writer)
 }
 
 type ccBinWriter struct {
@@ -116,7 +126,7 @@ func (dw *ccBinWriter) Close() error {
 	if dw.file == nil {
 		return nil
 	}
-	if dw.packageCompressType != NONE {
+	if dw.packageCompressType != NONE && dw.compressor != nil {
 		_ = dw.compressor.Close()
 	}
 	err := dw.file.Close()
@@ -124,6 +134,7 @@ func (dw *ccBinWriter) Close() error {
 		return err
 	}
 	dw.file = nil
+	dw.writer = nil
 	return nil
 }
 
@@ -147,7 +158,7 @@ func (dw *ccBinWriter) Open() error {
 		}
 	}
 
-	dw.docWriter = NewDocWriter(pw)
+	dw.writer = pw
 	return nil
 }
 
@@ -168,7 +179,7 @@ func (dw *ccBinWriter) Write(doc *Doc) (int, error) {
 	if dw.file == nil {
 		return 0, errors.New("not opened yet")
 	}
-	compressedDoc, err := CompressDoc(doc, dw.compressType)
+	compressedDoc, err := dw.docCompressor.CompressDoc(doc, dw.compressType)
 	if err != nil {
 		return 0, err
 	}
@@ -185,5 +196,5 @@ func (dw *ccBinWriter) Write(doc *Doc) (int, error) {
 			_ = dw.compressor.Flush()
 		}()
 	}
-	return dw.docWriter.Write(compressedDoc)
+	return compressedDoc.writeDoc(dw.writer)
 }

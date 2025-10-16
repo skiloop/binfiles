@@ -1,7 +1,6 @@
 package binfile
 
 import (
-	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -46,9 +45,21 @@ func ReadDoc(r io.Reader, doc *Doc) (int, error) {
 	if dc.ContentSize > MaxDocSize || dc.ContentSize <= 0 {
 		return nr, ErrReadDoc
 	}
-	var n int
 
-	doc.Content = make([]byte, 0, 512)
+	// 使用内存池获取缓冲区，预分配合适的大小
+	initialSize := int(dc.ContentSize)
+	if initialSize < 512 {
+		initialSize = 512
+	}
+
+	doc.Content = make([]byte, 0, initialSize)
+
+	// 预分配足够的空间
+	if int32(cap(doc.Content)) < dc.ContentSize {
+		doc.Content = make([]byte, 0, int(dc.ContentSize))
+	}
+
+	var n int
 	for {
 		if len(doc.Content) == cap(doc.Content) {
 			doc.Content = append(doc.Content, 0)[:len(doc.Content)]
@@ -94,40 +105,6 @@ func readInt32(r io.Reader, num *int32) (int, error) {
 	return int(unsafe.Sizeof(*num)), nil
 }
 
-func Decompress(doc *Doc, compressType int, verbose bool) (dst *Doc, err error) {
-	if NONE == compressType {
-		return doc, nil
-	}
-	reader, err := getDecompressReader(compressType, bytes.NewReader(doc.Content))
-	if err != nil || reader == nil {
-		if Verbose {
-			_, _ = fmt.Fprintf(os.Stderr, "decompressor reader creation error: %v\n", err)
-		}
-		return nil, ErrDecompressReader
-	}
-
-	var data []byte
-	data, err = io.ReadAll(reader)
-	if err != nil {
-		if verbose {
-			_, _ = fmt.Fprintf(os.Stderr, "decompress error: %v\n", err)
-		}
-		return nil, ErrValueDecompress
-	}
-	return &Doc{Key: CloneBytes(doc.Key), Content: data}, nil
-}
-
-func CompressDoc(doc *Doc, compressType int) (dst *Doc, err error) {
-	if NONE == compressType {
-		return doc, nil
-	}
-	buf, err := Compress(doc.Content, compressType)
-	if err != nil {
-		return nil, err
-	}
-	return &Doc{Key: CloneBytes(doc.Key), Content: buf}, nil
-}
-
 // writeDoc Write document to writer
 func (doc *Doc) writeDoc(w io.Writer) (int, error) {
 	var err error
@@ -160,6 +137,7 @@ func readNode(reader io.Reader, node *Node) (nr int, err error) {
 		return nr, ErrReadKey
 	}
 	if node.Size < 0 || node.Size > MaxDocSize || node.Size > KeySizeLimit {
+		_, _ = fmt.Fprintf(os.Stderr, "read node size error: %d\n", node.Size)
 		return nr, ErrReadKey
 	}
 	node.Data = make([]byte, node.Size)

@@ -3,13 +3,14 @@ package binfile
 import (
 	"errors"
 	"fmt"
-	"github.com/skiloop/binfiles/workers"
 	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/skiloop/binfiles/workers"
 )
 
 // Package files to bin file
@@ -88,13 +89,20 @@ func readContent(path string, compress int) ([]byte, error) {
 		_, _ = fmt.Fprintf(os.Stderr, "decompress reader error: %v\n", err)
 		return nil, err
 	}
-	var data []byte
-	data, err = io.ReadAll(reader)
+
+	// 使用内存池的缓冲区进行读取
+	buf := GlobalMemoryPool.GetCompressorBuffer()
+	defer GlobalMemoryPool.PutCompressorBuffer(buf)
+
+	// 读取所有数据到缓冲区
+	_, err = io.Copy(buf, reader)
 	if err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "decompress error: %v\n", err)
 		return nil, err
 	}
-	return data, nil
+
+	// 返回数据的副本
+	return buf.Bytes(), nil
 }
 
 func readDoc(path string, compress int) (*Doc, error) {

@@ -3,10 +3,11 @@ package binfile
 import (
 	"errors"
 	"fmt"
-	"github.com/skiloop/binfiles/workers"
 	"io"
 	"os"
 	"sync/atomic"
+
+	"github.com/skiloop/binfiles/workers"
 )
 
 type fileRepack struct {
