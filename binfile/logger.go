@@ -88,7 +88,8 @@ func (l *Logger) Debug(format string, args ...interface{}) {
 
 // Info 信息日志
 func (l *Logger) Info(format string, args ...interface{}) {
-	l.log(INFO, "[INFO] "+format, args...)
+	// l.log(INFO, "[INFO] "+format, args...)
+	l.log(INFO, format, args...)
 }
 
 // Warn 警告日志
