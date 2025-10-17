@@ -75,7 +75,7 @@ func (r *docRepack) worker(no int) {
 	LogInfo("[%d] worker done with %d documents\n", no, count)
 
 }
-func (r *docRepack) createWriter() (DocWriterCloser, error) {
+func (r *docRepack) createWriter(optimized bool) (DocWriterCloser, error) {
 	if r.contentOnly {
 		bw := newConDocFileWriter(r.target, r.pt)
 		if err := bw.Open(); err != nil {
@@ -83,19 +83,25 @@ func (r *docRepack) createWriter() (DocWriterCloser, error) {
 		}
 		return bw, nil
 	}
-	bw, err := NewCCBinWriter(r.target, r.pt, r.tt)
+	var bw BinWriter
+	var err error
+	if optimized {
+		bw, err = NewCCBinWriter(r.target, r.pt, r.tt)
+	} else {
+		bw, err = NewOldCCBinWriter(r.target, r.pt, r.tt)
+	}
 	if err != nil {
 		return nil, err
 	}
-	if err = bw.Open(); err != nil {
+	if err := bw.Open(); err != nil {
 		return nil, err
 	}
 	return bw, nil
 }
 
-func (r *docRepack) merge() {
+func (r *docRepack) merge(optimized bool) {
 
-	bw, err := r.createWriter()
+	bw, err := r.createWriter(optimized)
 	if err != nil {
 		LogError("fail to create writer: %v\n", err)
 		return
@@ -138,7 +144,7 @@ func getFileSize(filename string) (int64, error) {
 	return fileInfo.Size(), nil
 }
 
-func (r *docRepack) start(workerCount int) (err error) {
+func (r *docRepack) start(workerCount int, optimized bool) (err error) {
 	// set step
 	r.fileSize, err = getFileSize(r.source)
 	if err != nil {
@@ -149,28 +155,8 @@ func (r *docRepack) start(workerCount int) (err error) {
 	r.docCh = make(chan *Doc, workerCount+3)
 	r.stopCh = make(chan interface{})
 	// start run
-	go r.merge()
+	go r.merge(optimized)
 	workers.RunJobs(workerCount, nil, r.worker, nil)
-	// tell merger to finish
-	r.docCh <- nil
-	<-r.stopCh
-	return nil
-}
-
-// OptimizedStart 优化版本的start方法，使用内存池
-func (r *docRepack) OptimizedStart(workerCount int) (err error) {
-	// set step
-	r.fileSize, err = getFileSize(r.source)
-	if err != nil {
-		return err
-	}
-	r.step = int64(math.Ceil(float64(r.fileSize) / float64(workerCount)))
-	// create channel
-	r.docCh = make(chan *Doc, workerCount+3)
-	r.stopCh = make(chan interface{})
-	// start run
-	go r.merge()
-	workers.RunJobs(workerCount, nil, r.OptimizedDocWorker, nil)
 	// tell merger to finish
 	r.docCh <- nil
 	<-r.stopCh

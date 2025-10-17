@@ -44,12 +44,7 @@ func Repack(opt RepackCmd) error {
 			r.tt = NONE
 			r.st = NONE
 		}
-		if opt.Optimized {
-			or := NewOptimizedFileRepack(&r)
-			return or.start(opt.Source, opt.Workers)
-		} else {
-			return r.start(opt.Source, opt.Workers)
-		}
+		return r.start(opt.Source, opt.Workers, opt.Optimized)
 	}
 	// repack using multiple workers on reading docs from the same file
 	if opt.Mode == "doc" {
@@ -69,11 +64,7 @@ func Repack(opt RepackCmd) error {
 			r.tt = NONE
 			r.st = NONE
 		}
-		if opt.Optimized {
-			return r.OptimizedStart(opt.Workers)
-		} else {
-			return r.start(opt.Workers)
-		}
+		return r.start(opt.Workers, opt.Optimized)
 	}
 
 	r := pathRepack{

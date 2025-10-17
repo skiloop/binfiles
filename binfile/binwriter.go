@@ -94,6 +94,30 @@ func (dw *binWriter) unlock() error {
 	return err
 }
 
+type oldBinWriter struct {
+	*binWriter
+	oldCompressor oldCompressor
+}
+
+func (dw *oldBinWriter) Write(doc *Doc) (int, error) {
+	if dw.file == nil {
+		return 0, errors.New("not opened yet")
+	}
+	compressedDoc, err := dw.oldCompressor.CompressDoc(doc, dw.compressType)
+	if err != nil {
+		return 0, err
+	}
+	// LogInfo("write doc: %s, %d -> %d\n", string(compressedDoc.Key), len(doc.Content), len(compressedDoc.Content))
+	if err = dw.lock(); err != nil {
+		LogError("lock file error: %v\n", err)
+		return 0, err
+	}
+	defer func() {
+		_ = dw.unlock()
+	}()
+	return compressedDoc.writeDoc(dw.writer)
+}
+
 func (dw *binWriter) Write(doc *Doc) (int, error) {
 	if dw.file == nil {
 		return 0, errors.New("not opened yet")
@@ -173,6 +197,45 @@ func NewCCBinWriter(filename string, packageCompressType, compressType int) (Bin
 		packageCompressType: packageCompressType,
 	}
 	return bw, nil
+}
+
+func NewOldCCBinWriter(filename string, packageCompressType, compressType int) (BinWriter, error) {
+	bw := &oldCCBinWriter{
+		ccBinWriter: ccBinWriter{
+			binWriter: binWriter{
+				filename:     filename,
+				compressType: compressType,
+				file:         nil,
+				mu:           sync.Mutex{},
+			},
+			packageCompressType: packageCompressType,
+		},
+		oldCompressor: oldCompressor{},
+	}
+	return bw, nil
+}
+
+type oldCCBinWriter struct {
+	ccBinWriter
+	oldCompressor oldCompressor
+}
+
+func (dw *oldCCBinWriter) Write(doc *Doc) (int, error) {
+	if dw.file == nil {
+		return 0, errors.New("not opened yet")
+	}
+	compressedDoc, err := dw.oldCompressor.CompressDoc(doc, dw.compressType)
+	if err != nil {
+		return 0, err
+	}
+	if err = dw.lock(); err != nil {
+		LogError("lock file error: %v\n", err)
+		return 0, err
+	}
+	defer func() {
+		_ = dw.unlock()
+	}()
+	return compressedDoc.writeDoc(dw.writer)
 }
 
 func (dw *ccBinWriter) Write(doc *Doc) (int, error) {

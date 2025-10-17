@@ -56,14 +56,13 @@ func RandStringBytesMaskImprSrc(n int) string {
 	return string(b)
 }
 
-func initTestFile(testFile string, t *testing.T) (picked int, doc *Doc) {
+func initTestFile(testFile string, total int, t *testing.T) (picked int, doc *Doc) {
 	// 初始化测试文件
 	bw := NewBinWriter(testFile, NONE)
 	err := bw.Open()
 	if err != nil {
 		t.Fatalf("打开写入器失败: %v", err)
 	}
-	total := 1000
 	picked = rand.Intn(total)
 	i := 0
 	for i < total {
@@ -88,26 +87,43 @@ func initTestFile(testFile string, t *testing.T) (picked int, doc *Doc) {
 
 // TestOptimizedRepackFunctionality 测试优化后repack的功能
 func TestOptimizedRepackFunctionality(t *testing.T) {
+	RedirectToDevNull()
 	outputRoot := "/tmp/optimized_repack_test"
 	testFile := fmt.Sprintf("%s/test.bin", outputRoot)
 	os.MkdirAll(outputRoot, 0755)
 	defer os.RemoveAll(outputRoot)
 	// 初始化测试文件
-	picked, doc := initTestFile(testFile, t)
+	picked, doc := initTestFile(testFile, 2000, t)
 	if doc == nil {
 		t.Fatalf("初始化测试文件失败")
 	}
-	repackModes := []string{"doc", "file"}
-	for _, mode := range repackModes {
-		t.Run(fmt.Sprintf("OptimizedRepack_%s", mode), func(t *testing.T) {
-			outputFile := fmt.Sprintf("%s/optimized_%s.bin", outputRoot, mode)
+	testConfig := []struct {
+		mode         string
+		compressType int
+		workers      int
+	}{
+		{"doc", XZ, 4},
+		{"file", XZ, 4},
+		{"doc", GZIP, 4},
+		{"file", GZIP, 4},
+		{"doc", BZIP2, 4},
+		{"file", BZIP2, 4},
+		{"doc", BROTLI, 4},
+		{"file", BROTLI, 4},
+		{"doc", LZ4, 4},
+		{"file", LZ4, 4},
+	}
+	for _, config := range testConfig {
+		compTypeName := getCompressionTypeName(config.compressType)
+		t.Run(fmt.Sprintf("OptimizedRepack_%s_%s_%d", config.mode, compTypeName, config.workers), func(t *testing.T) {
+			outputFile := fmt.Sprintf("%s/optimized_%s_%s_%d.bin", outputRoot, config.mode, compTypeName, config.workers)
 			opt := RepackCmd{
 				Source:              testFile,
 				Target:              outputFile,
-				Workers:             2,
-				Mode:                mode,
+				Workers:             config.workers,
+				Mode:                config.mode,
 				SourceCompressType:  "none",
-				TargetCompressType:  "gzip",
+				TargetCompressType:  compTypeName,
 				PackageCompressType: "none",
 				Limit:               0,
 			}
@@ -123,8 +139,8 @@ func TestOptimizedRepackFunctionality(t *testing.T) {
 			if fileSize == 0 {
 				t.Fatalf("输出文件大小为0: %s", outputFile)
 			}
-			t.Logf("输出文件大小: %d", fileSize)
-			br, err := NewBinReader(outputFile, GZIP)
+			// t.Logf("输出文件大小: %d", fileSize)
+			br, err := NewBinReader(outputFile, config.compressType)
 			if err != nil {
 				t.Fatalf("读取输出文件失败: %v", err)
 			}
@@ -139,7 +155,7 @@ func TestOptimizedRepackFunctionality(t *testing.T) {
 			if !reflect.DeepEqual(doc, rdoc) {
 				t.Fatalf("文档不一致: %v != %v", doc, rdoc)
 			}
-			t.Logf("优化repack成功，输出文件: %s", outputFile)
+			t.Logf("优化repack成功")
 		})
 	}
 
@@ -426,49 +442,56 @@ func BenchmarkOptimizedCompression(b *testing.B) {
 
 // TestRepackPerformanceComparison 测试repack功能的性能对比
 func TestRepackPerformanceComparison(t *testing.T) {
-	// 从环境变量获取测试文件，如果没有则创建临时文件
-	testFile := os.Getenv("REPACK_TEST_FILE")
-	if testFile == "" {
-		testFile = "/tmp/repack_performance_test.bin"
-		t.Logf("未设置REPACK_TEST_FILE环境变量，使用默认测试文件: %s", testFile)
-	}
-	Verbose = false
-	Debug = false
+	outputRoot := "/tmp/repack_performance_output"
+	os.MkdirAll(outputRoot, 0755)
+	defer os.RemoveAll(outputRoot)
+	testFile := fmt.Sprintf("%s/test.bin", outputRoot)
+	RedirectToDevNull()
 
 	// 创建测试文件（如果不存在）
 	if _, err := os.Stat(testFile); os.IsNotExist(err) {
 		t.Logf("创建测试文件: %s", testFile)
-		err := createLargeTestFile(testFile, t)
+		err := createLargeTestFile(testFile, NONE, t)
 		if err != nil {
 			t.Fatalf("创建测试文件失败: %v", err)
 		}
 	}
 
-	outputRoot := "/tmp/repack_performance_output"
-	os.MkdirAll(outputRoot, 0755)
-	defer os.RemoveAll(outputRoot)
-
 	// 测试配置
 	testConfigs := []struct {
-		name                string
-		mode                string
-		workers             int
-		sourceCompressType  string
-		targetCompressType  string
-		packageCompressType string
-		optimized           bool
+		name               string
+		mode               string
+		workers            int
+		targetCompressType string
+		optimized          bool
 	}{
 		// File模式测试
-		{"File_Original", "file", 3, "gzip", "none", "none", false},
-		{"File_Optimized", "file", 3, "gzip", "none", "none", true},
-		{"File_Compression_Original", "file", 3, "gzip", "brotli", "lz4", false},
-		{"File_Compression_Optimized", "file", 3, "gzip", "brotli", "lz4", true},
+		{"File_Original_none", "file", 3, "none", false},
+		{"File_Optimized_none", "file", 3, "none", true},
+		{"File_Original_brotli", "file", 3, "brotli", false},
+		{"File_Optimized_brotli", "file", 3, "brotli", true},
+		{"File_Original_gzip", "file", 3, "gzip", false},
+		{"File_Optimized_gzip", "file", 3, "gzip", true},
+		{"File_Original_bzip2", "file", 3, "bzip2", false},
+		{"File_Optimized_bzip2", "file", 3, "bzip2", true},
+		{"File_Original_lz4", "file", 3, "lz4", false},
+		{"File_Optimized_lz4", "file", 3, "lz4", true},
+		{"File_Original_xz", "file", 3, "xz", false},
+		{"File_Optimized_xz", "file", 3, "xz", true},
 
 		// Doc模式测试
-		{"Doc_Original", "doc", 5, "gzip", "none", "none", false},
-		{"Doc_Optimized", "doc", 5, "gzip", "none", "none", true},
-		{"Doc_Compression_Original", "doc", 5, "gzip", "bzip2", "xz", false},
-		{"Doc_Compression_Optimized", "doc", 5, "gzip", "bzip2", "xz", true},
+		{"Doc_Original_none", "doc", 5, "none", false},
+		{"Doc_Optimized_none", "doc", 5, "none", true},
+		{"Doc_Original_brotli", "doc", 5, "brotli", false},
+		{"Doc_Optimized_brotli", "doc", 5, "brotli", true},
+		{"Doc_Original_gzip", "doc", 5, "gzip", false},
+		{"Doc_Optimized_gzip", "doc", 5, "gzip", true},
+		{"Doc_Original_bzip2", "doc", 5, "bzip2", false},
+		{"Doc_Optimized_bzip2", "doc", 5, "bzip2", true},
+		{"Doc_Original_lz4", "doc", 5, "lz4", false},
+		{"Doc_Optimized_lz4", "doc", 5, "lz4", true},
+		{"Doc_Original_xz", "doc", 5, "xz", false},
+		{"Doc_Optimized_xz", "doc", 5, "xz", true},
 	}
 
 	for _, config := range testConfigs {
@@ -486,9 +509,9 @@ func TestRepackPerformanceComparison(t *testing.T) {
 				Target:              outputFile,
 				Workers:             config.workers,
 				Mode:                config.mode,
-				SourceCompressType:  config.sourceCompressType,
+				SourceCompressType:  "none",
 				TargetCompressType:  config.targetCompressType,
-				PackageCompressType: config.packageCompressType,
+				PackageCompressType: "none",
 				Optimized:           config.optimized, // 假设RepackCmd有这个字段
 			}
 
@@ -520,16 +543,12 @@ func TestRepackPerformanceComparison(t *testing.T) {
 
 // BenchmarkRepackPerformance 基准测试repack性能
 func BenchmarkRepackPerformance(b *testing.B) {
-	// 创建测试文件
-	testFile := "/tmp/benchmark_repack_test.bin"
-	if _, err := os.Stat(testFile); os.IsNotExist(err) {
-		// 创建基准测试文件
-		err := createBenchmarkTestFile(testFile)
-		if err != nil {
-			b.Fatalf("创建基准测试文件失败: %v", err)
-		}
-	}
-	defer os.Remove(testFile)
+	SetGlobalLogLevel(ERROR)
+	outputRoot := "/tmp/benchmark_repack_test"
+	os.MkdirAll(outputRoot, 0755)
+	defer os.RemoveAll(outputRoot)
+	testFile := fmt.Sprintf("%s/test.bin", outputRoot)
+	createBenchmarkTestFile(testFile, NONE)
 
 	benchmarks := []struct {
 		name      string
@@ -553,8 +572,8 @@ func BenchmarkRepackPerformance(b *testing.B) {
 					Target:              outputFile,
 					Workers:             bench.workers,
 					Mode:                bench.mode,
-					SourceCompressType:  "gzip",
-					TargetCompressType:  "none",
+					SourceCompressType:  "none",
+					TargetCompressType:  "gzip",
 					PackageCompressType: "none",
 					Optimized:           bench.optimized,
 				}
@@ -572,8 +591,8 @@ func BenchmarkRepackPerformance(b *testing.B) {
 }
 
 // createLargeTestFile 创建大型测试文件用于repack测试
-func createLargeTestFile(filename string, t *testing.T) error {
-	bw := NewBinWriter(filename, GZIP)
+func createLargeTestFile(filename string, compressType int, t *testing.T) error {
+	bw := NewBinWriter(filename, compressType)
 	err := bw.Open()
 	if err != nil {
 		return err
@@ -598,10 +617,11 @@ func createLargeTestFile(filename string, t *testing.T) error {
 }
 
 // createBenchmarkTestFile 创建基准测试文件
-func createBenchmarkTestFile(filename string) error {
-	bw := NewBinWriter(filename, GZIP)
+func createBenchmarkTestFile(filename string, compressType int) error {
+	bw := NewBinWriter(filename, compressType)
 	err := bw.Open()
 	if err != nil {
+		LogError("创建基准测试文件失败: %v", err)
 		return err
 	}
 	defer bw.Close()
@@ -615,6 +635,7 @@ func createBenchmarkTestFile(filename string) error {
 		}
 		_, err = bw.Write(doc)
 		if err != nil {
+			LogError("创建基准测试文件失败: %v", err)
 			return err
 		}
 	}

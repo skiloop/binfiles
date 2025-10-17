@@ -24,10 +24,17 @@ type fileRepack struct {
 	idx        atomic.Int32
 }
 
-func (r *fileRepack) nextBinWriter() BinWriter {
+func (r *fileRepack) nextBinWriter(optimized bool) BinWriter {
 	no := r.idx.Add(1)
 	filename := fmt.Sprintf("%s.%d", r.target, no)
-	return NewBinWriter(filename, r.tt)
+	writer := NewBinWriter(filename, r.tt)
+	if optimized {
+		return writer
+	}
+	return &oldBinWriter{
+		binWriter:     writer.(*binWriter),
+		oldCompressor: oldCompressor{},
+	}
 }
 
 func (r *fileRepack) seeder() {
@@ -117,10 +124,10 @@ func (r *fileRepack) merge(stopCh chan interface{}) {
 
 }
 
-func (r *fileRepack) worker(no int) {
+func (r *fileRepack) worker(no int, optimized bool) {
 	LogInfo("worker %d started\n", no)
 	var err error
-	rp := r.nextBinWriter()
+	rp := r.nextBinWriter(optimized)
 	err = rp.Open()
 	if err != nil {
 		return
@@ -150,7 +157,7 @@ func (r *fileRepack) worker(no int) {
 			LogInfo("[%d] %s done with %d docs\n", no, rp.Filename(), docs)
 			_ = rp.Close()
 			r.filenameCh <- rp.Filename()
-			rp = r.nextBinWriter()
+			rp = r.nextBinWriter(optimized)
 			err = rp.Open()
 			if err != nil {
 				LogError("[%d]failed to get next packager: %v\n", no, err)
@@ -165,7 +172,7 @@ func (r *fileRepack) worker(no int) {
 	LogInfo("[%d]fileWorker done with %d docs\n", no, count)
 }
 
-func (r *fileRepack) start(source string, workerCount int) error {
+func (r *fileRepack) start(source string, workerCount int, optimized bool) error {
 	fn, err := os.OpenFile(source, os.O_RDONLY, 0644)
 	if err != nil {
 		LogError("failed to open %s: %v\n", source, err)
@@ -179,7 +186,9 @@ func (r *fileRepack) start(source string, workerCount int) error {
 	waitMergerCh := make(chan interface{})
 	go r.merge(waitMergerCh)
 
-	workers.RunJobs(workerCount, r.stopSeeder, r.worker, r.seeder)
+	workers.RunJobs(workerCount, r.stopSeeder, func(no int) {
+		r.worker(no, optimized)
+	}, r.seeder)	
 
 	r.filenameCh <- workerEndFlag
 	<-waitMergerCh
