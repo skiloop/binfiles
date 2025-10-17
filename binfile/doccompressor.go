@@ -2,9 +2,7 @@ package binfile
 
 import (
 	"bytes"
-	"fmt"
 	"io"
-	"os"
 )
 
 type DocCompressor interface {
@@ -24,7 +22,7 @@ func (c OptimizedDocCompressor) Decompress(doc *Doc, compressType int, verbose b
 	data, err := GlobalMemoryPool.DecompressWithPool(doc.Content, compressType)
 	if err != nil {
 		if verbose {
-			_, _ = fmt.Fprintf(os.Stderr, "decompress error: %v\n", err)
+			LogError("decompress error: %v\n", err)
 		}
 		return nil, err
 	}
@@ -61,7 +59,7 @@ func (c oldCompressor) Decompress(doc *Doc, compressType int, verbose bool) (dst
 	reader, err := getDecompressor(compressType, bytes.NewReader(doc.Content))
 	if err != nil {
 		if Verbose {
-			_, _ = fmt.Fprintf(os.Stderr, "decompressor reader creation error: %v\n", err)
+			LogError("decompressor reader creation error: %v\n", err)
 		}
 		return nil, ErrDecompressReader
 	}
@@ -70,7 +68,7 @@ func (c oldCompressor) Decompress(doc *Doc, compressType int, verbose bool) (dst
 	data, err = io.ReadAll(reader)
 	if err != nil {
 		if verbose {
-			_, _ = fmt.Fprintf(os.Stderr, "decompress error: %v\n", err)
+			LogError("decompress error: %v\n", err)
 		}
 		return nil, ErrValueDecompress
 	}

@@ -1,7 +1,6 @@
 package binfile
 
 import (
-	"fmt"
 	"io"
 	"os"
 )
@@ -38,12 +37,12 @@ var CompressTypes = map[string]int{
 
 func debug(format string, a ...any) {
 	if Debug {
-		fmt.Printf(format, a...)
+		LogInfo(format, a...)
 	}
 }
 
 func errorf(format string, a ...any) {
-	_, _ = fmt.Fprintf(os.Stderr, format, a...)
+	LogError(format, a...)
 }
 
 type outWriter struct {

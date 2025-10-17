@@ -10,7 +10,7 @@ import (
 // 示例1：替换decompressor.go中的错误输出
 func ExampleReplaceDecompressorOutput() {
 	// 原来的代码：
-	// _, _ = fmt.Fprintf(os.Stderr, "decompress reader error: %v\n", err)
+	// LogError("decompress reader error: %v\n", err)
 
 	// 替换为：
 	err := fmt.Errorf("示例错误")
@@ -20,7 +20,7 @@ func ExampleReplaceDecompressorOutput() {
 // 示例2：替换package.go中的错误输出
 func ExampleReplacePackageOutput() {
 	// 原来的代码：
-	// _, _ = fmt.Fprintf(os.Stderr, "decompress error: %v\n", err)
+	// LogError("decompress error: %v\n", err)
 
 	// 替换为：
 	err := fmt.Errorf("示例错误")
@@ -30,7 +30,7 @@ func ExampleReplacePackageOutput() {
 // 示例3：替换doc.go中的错误输出
 func ExampleReplaceDocOutput() {
 	// 原来的代码：
-	// _, _ = fmt.Fprintf(os.Stderr, "read doc content error: %v\n", err)
+	// LogError("read doc content error: %v\n", err)
 
 	// 替换为：
 	err := fmt.Errorf("示例错误")
@@ -132,7 +132,7 @@ func ExampleBulkReplacementScript() {
 	// 1. 替换 fmt.Fprintf(os.Stderr,
 	// sed -i 's/fmt\.Fprintf(os\.Stderr, /LogError(/g' *.go
 
-	// 2. 替换 fmt.Printf(
+	// 2. 替换 LogInfo(
 	// sed -i 's/fmt\.Printf(/LogInfo(/g' *.go
 
 	// 3. 替换 fmt.Println(

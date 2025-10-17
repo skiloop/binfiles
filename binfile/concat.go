@@ -12,7 +12,7 @@ package binfile
 //for _, file := range files {
 //	src, err := os.OpenFile(file, os.O_RDONLY, 0644)
 //	if err != nil {
-//		_, _ = fmt.Fprintf(os.Stderr, "read file %s error: %v\n", file, err)
+//		LogError("read file %s error: %v\n", file, err)
 //		continue
 //	}
 //

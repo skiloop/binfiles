@@ -1,9 +1,7 @@
 package binfile
 
 import (
-	"fmt"
 	"io"
-	"os"
 	"sync"
 )
 
@@ -38,7 +36,7 @@ func NewOptimizedFileRepack(original *fileRepack) *OptimizedFileRepack {
 
 // OptimizedWorker 优化的worker，使用内存池减少内存分配
 func (r *OptimizedFileRepack) OptimizedWorker(no int) {
-	fmt.Printf("optimized worker %d started\n", no)
+	LogInfo("optimized worker %d started\n", no)
 
 	// 获取worker专用的缓冲区
 	docBuffer := r.memoryPool.GetDocBuffer()
@@ -65,19 +63,19 @@ func (r *OptimizedFileRepack) OptimizedWorker(no int) {
 		}
 
 		if Verbose {
-			fmt.Printf("[%d] package %s\n", no, doc.Key)
+			LogInfo("[%d] package %s\n", no, doc.Key)
 		}
 
 		// 使用内存池优化的压缩
 		compressedDoc, err := optCompressor.CompressDoc(doc, r.tt)
 		if err != nil {
-			_, _ = fmt.Fprintf(os.Stderr, "[%d] compression error: %s, %v\n", no, doc.Key, err)
+			LogError("[%d] compression error: %s, %v\n", no, doc.Key, err)
 			continue
 		}
 
 		_, err = rp.Write(compressedDoc)
 		if err != nil {
-			_, _ = fmt.Fprintf(os.Stderr, "[%d] write error: %s, %v\n", no, doc.Key, err)
+			LogError("[%d] write error: %s, %v\n", no, doc.Key, err)
 			continue
 		}
 
@@ -85,13 +83,13 @@ func (r *OptimizedFileRepack) OptimizedWorker(no int) {
 		count += 1
 
 		if r.split > 0 && count%int64(r.split) == 0 {
-			fmt.Printf("[%d] %s done with %d docs\n", no, rp.Filename(), docs)
+			LogInfo("[%d] %s done with %d docs\n", no, rp.Filename(), docs)
 			_ = rp.Close()
 			r.filenameCh <- rp.Filename()
 			rp = r.nextBinWriter()
 			err = rp.Open()
 			if err != nil {
-				_, _ = fmt.Fprintf(os.Stderr, "[%d] failed to get next packager: %v\n", no, err)
+				LogError("[%d] failed to get next packager: %v\n", no, err)
 				break
 			}
 			docs = 0
@@ -99,9 +97,9 @@ func (r *OptimizedFileRepack) OptimizedWorker(no int) {
 	}
 
 	count -= int64(init)
-	fmt.Printf("[%d] %s done with %d docs\n", no, rp.Filename(), docs)
+	LogInfo("[%d] %s done with %d docs\n", no, rp.Filename(), docs)
 	_ = rp.Close()
-	fmt.Printf("[%d] optimized fileWorker done with %d docs\n", no, count)
+	LogInfo("[%d] optimized fileWorker done with %d docs\n", no, count)
 }
 
 // OptimizedDocWorker 优化的文档worker，使用内存池
@@ -112,7 +110,7 @@ func (r *docRepack) OptimizedDocWorker(no int) {
 
 	end := r.pos.Add(r.step)
 	offset := end - r.step
-	fmt.Printf("[%d] optimized worker starts on %d to %d\n", no, offset, end)
+	LogInfo("[%d] optimized worker starts on %d to %d\n", no, offset, end)
 
 	br, err := NewBinReader(r.source, r.st)
 	if err != nil {
@@ -129,7 +127,7 @@ func (r *docRepack) OptimizedDocWorker(no int) {
 		if err != nil {
 			pos, dc := reader.next(offset, end, -1, -1, nil)
 			if dc == nil {
-				fmt.Printf("[%d] no more doc after %d\n", no, offset)
+				LogInfo("[%d] no more doc after %d\n", no, offset)
 				break
 			}
 			offset, doc = pos, dc
@@ -147,7 +145,7 @@ func (r *docRepack) OptimizedDocWorker(no int) {
 		if r.st != NONE || r.tt != NONE {
 			compressedDoc, err := optCompressor.CompressDoc(doc, r.tt)
 			if err != nil {
-				_, _ = fmt.Fprintf(os.Stderr, "[%d] compression error: %v\n", no, err)
+				LogError("[%d] compression error: %v\n", no, err)
 				continue
 			}
 			doc = compressedDoc
@@ -158,13 +156,13 @@ func (r *docRepack) OptimizedDocWorker(no int) {
 		case r.docCh <- doc:
 			count++
 		case <-r.stopCh: // Handle stop signal
-			fmt.Printf("[%d] optimized worker stopped\n", no)
+			LogInfo("[%d] optimized worker stopped\n", no)
 			// tell other workers to stop
 			r.stopCh <- nil
 			break
 		}
 	}
-	fmt.Printf("[%d] optimized worker done with %d documents\n", no, count)
+	LogInfo("[%d] optimized worker done with %d documents\n", no, count)
 }
 
 // BatchProcessor 批量处理器，用于进一步优化I/O

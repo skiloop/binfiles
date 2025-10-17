@@ -3,9 +3,7 @@ package binfile
 import (
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"io"
-	"os"
 	"unsafe"
 )
 
@@ -77,7 +75,7 @@ func ReadDoc(r io.Reader, doc *Doc) (int, error) {
 	}
 
 	if err != nil && io.EOF != err {
-		_, _ = fmt.Fprintf(os.Stderr, "read doc content error: %v\n", err)
+		LogError("read doc content error: %v\n", err)
 		return nr, ErrReadDoc
 	}
 	doc.Key = dc.Key
@@ -133,11 +131,11 @@ func readNode(reader io.Reader, node *Node) (nr int, err error) {
 		return nr, err
 	}
 	if err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "read int error: %v\n", err)
+		LogError("read int error: %v\n", err)
 		return nr, ErrReadKey
 	}
 	if node.Size < 0 || node.Size > MaxDocSize || node.Size > KeySizeLimit {
-		// _, _ = fmt.Fprintf(os.Stderr, "read node size error: %d\n", node.Size)
+		// LogError("read node size error: %d\n", node.Size)
 		return nr, ErrReadKey
 	}
 	node.Data = make([]byte, node.Size)
@@ -150,7 +148,7 @@ func readNode(reader io.Reader, node *Node) (nr int, err error) {
 	}
 
 	if err != nil && err != io.EOF {
-		_, _ = fmt.Fprintf(os.Stderr, "read node data error: %v\n", err)
+		LogError("read node data error: %v\n", err)
 		return nr, ErrReadDoc
 	}
 	return nr, nil

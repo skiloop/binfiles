@@ -31,7 +31,7 @@ func (r *fileRepack) nextBinWriter() BinWriter {
 }
 
 func (r *fileRepack) seeder() {
-	fmt.Println("reader starts")
+	LogInfo("reader starts")
 	count := 0
 	for {
 		offset, _ := r.reader.Seek(0, io.SeekCurrent)
@@ -40,11 +40,11 @@ func (r *fileRepack) seeder() {
 			break
 		}
 		if errors.Is(err, ErrValueDecompress) {
-			_, _ = fmt.Fprintf(os.Stderr, "doc read error at %d: %v\n", offset, err)
+			LogError("doc read error at %d: %v\n", offset, err)
 			continue
 		}
 		if err != nil {
-			_, _ = fmt.Fprintf(os.Stderr, "doc read error at %d: %v\n", offset, err)
+			LogError("doc read error at %d: %v\n", offset, err)
 			break
 		}
 		if doc == nil {
@@ -60,7 +60,7 @@ func (r *fileRepack) seeder() {
 			break
 		}
 	}
-	fmt.Printf("reader done with %d documents\n", count)
+	LogInfo("reader done with %d documents\n", count)
 	r.docCh <- nil
 }
 
@@ -70,7 +70,7 @@ func (r *fileRepack) merge(stopCh chan interface{}) {
 	}()
 	fw, err := os.OpenFile(r.target, writerFileFlag, 0644)
 	if err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "fail to open file %s: %v\n", r.target, err)
+		LogError("fail to open file %s: %v\n", r.target, err)
 		return
 	}
 	defer closeWriter(fw, r.target)
@@ -95,30 +95,30 @@ func (r *fileRepack) merge(stopCh chan interface{}) {
 		}
 		rdr, err = os.OpenFile(filename, os.O_RDONLY, 0644)
 		if err != nil {
-			_, _ = fmt.Fprintf(os.Stderr, "fail to open file %s: %v\n", filename, err)
+			LogError("fail to open file %s: %v\n", filename, err)
 			failed = true
 			continue
 		}
-		fmt.Printf("merging %s\n", filename)
+		LogInfo("merging %s\n", filename)
 		nw, err = io.Copy(cw, rdr)
 		_ = rdr.Close()
 		if err != nil {
-			_, _ = fmt.Fprintf(os.Stderr, "fail to append file %s: %v\n", filename, err)
+			LogError("fail to append file %s: %v\n", filename, err)
 			failed = true
 			continue
 		}
 		count += 1
 		_ = os.Remove(filename)
 		if Debug {
-			fmt.Printf("%s merged with %d bytes\n", filename, nw)
+			LogInfo("%s merged with %d bytes\n", filename, nw)
 		}
 	}
-	fmt.Printf("merger done with %d files\n", count)
+	LogInfo("merger done with %d files\n", count)
 
 }
 
 func (r *fileRepack) worker(no int) {
-	fmt.Printf("worker %d started\n", no)
+	LogInfo("worker %d started\n", no)
 	var err error
 	rp := r.nextBinWriter()
 	err = rp.Open()
@@ -136,39 +136,39 @@ func (r *fileRepack) worker(no int) {
 			break
 		}
 		if Verbose {
-			fmt.Printf("[%d]package %s\n", no, doc.Key)
+			LogInfo("[%d]package %s\n", no, doc.Key)
 		}
 		_, err = rp.Write(doc)
 		if err != nil {
-			_, _ = fmt.Fprintf(os.Stderr, "[%d]write error: %s, %v\n", no, doc.Key, err)
+			LogError("[%d]write error: %s, %v\n", no, doc.Key, err)
 			continue
 		}
 		docs += 1
 		count += 1
 
 		if r.split > 0 && count%int64(r.split) == 0 {
-			fmt.Printf("[%d] %s done with %d docs\n", no, rp.Filename(), docs)
+			LogInfo("[%d] %s done with %d docs\n", no, rp.Filename(), docs)
 			_ = rp.Close()
 			r.filenameCh <- rp.Filename()
 			rp = r.nextBinWriter()
 			err = rp.Open()
 			if err != nil {
-				_, _ = fmt.Fprintf(os.Stderr, "[%d]failed to get next packager: %v\n", no, err)
+				LogError("[%d]failed to get next packager: %v\n", no, err)
 				break
 			}
 			docs = 0
 		}
 	}
 	count -= int64(init)
-	fmt.Printf("[%d] %s done with %d docs\n", no, rp.Filename(), docs)
+	LogInfo("[%d] %s done with %d docs\n", no, rp.Filename(), docs)
 	_ = rp.Close()
-	fmt.Printf("[%d]fileWorker done with %d docs\n", no, count)
+	LogInfo("[%d]fileWorker done with %d docs\n", no, count)
 }
 
 func (r *fileRepack) start(source string, workerCount int) error {
 	fn, err := os.OpenFile(source, os.O_RDONLY, 0644)
 	if err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "failed to open %s: %v\n", source, err)
+		LogError("failed to open %s: %v\n", source, err)
 		return err
 	}
 	r.reader = NewSeeker(fn, r.st)

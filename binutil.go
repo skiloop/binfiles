@@ -3,12 +3,13 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
-	"github.com/alecthomas/kong"
-	"github.com/skiloop/binfiles/binfile"
-	"github.com/skiloop/binfiles/version"
 	"os"
 	"runtime"
+
+	"github.com/alecthomas/kong"
+
+	"github.com/skiloop/binfiles/binfile"
+	"github.com/skiloop/binfiles/version"
 )
 
 type ListCmd struct {
@@ -77,12 +78,12 @@ var client struct {
 func newReader(filename string, compress string) binfile.BinReader {
 	ct, ok := binfile.CompressTypes[compress]
 	if !ok {
-		_, _ = fmt.Fprintf(os.Stderr, "unknown compression type %s\n", client.CompressType)
+		binfile.LogError("unknown compression type %s\n", client.CompressType)
 		return nil
 	}
 	r, err := binfile.NewBinReader(filename, ct)
 	if err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "fail to init bin reader: %v\n", err)
+		binfile.LogError("fail to init bin reader: %v\n", err)
 		return nil
 	}
 	return r
@@ -91,7 +92,7 @@ func newReader(filename string, compress string) binfile.BinReader {
 func newWriter(filename string, compress string) binfile.BinWriter {
 	ct, ok := binfile.CompressTypes[compress]
 	if !ok {
-		_, _ = fmt.Fprintf(os.Stderr, "unknown compression type %s\n", client.CompressType)
+		binfile.LogError("unknown compression type %s\n", client.CompressType)
 		return nil
 	}
 	return binfile.NewBinWriter(filename, ct)
@@ -130,7 +131,7 @@ func countDocs(br binfile.BinReader) {
 	}
 	count := br.Count(client.Count.Offset, client.Count.WorkerCount, step, client.Count.SkipError)
 	if count >= 0 {
-		fmt.Printf("%d\n", count)
+		binfile.LogInfo("%d\n", count)
 	}
 }
 
@@ -151,27 +152,27 @@ func searchDocs(br binfile.BinReader) {
 		SkipError: !client.Search.NoSkipError,
 	}
 	if binfile.Verbose {
-		fmt.Printf("Key   : %s\n", opt.Key)
-		fmt.Printf("Offset: %d\n", opt.Offset)
-		fmt.Printf("Number: %d\n", opt.Number)
+		binfile.LogInfo("Key   : %s\n", opt.Key)
+		binfile.LogInfo("Offset: %d\n", opt.Offset)
+		binfile.LogInfo("Number: %d\n", opt.Number)
 	}
 	pos := br.Search(opt)
 	if pos < 0 {
-		_, _ = fmt.Fprintf(os.Stderr, "document with key %s not found", client.Search.Key)
+		binfile.LogError("document with key %s not found", client.Search.Key)
 		return
 	}
 	doc, err := br.Read(pos, true)
 	if err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "document found at %d but read error: %v\n", pos, err)
+		binfile.LogError("document found at %d but read error: %v\n", pos, err)
 		return
 	}
 	if !client.Search.Pretty {
-		fmt.Printf("%10d\t%s\n", pos, doc.Content)
+		binfile.LogInfo("%10d\t%s\n", pos, doc.Content)
 		return
 	}
 	err, buf := JsonPrettify([]byte(doc.Content))
 	if err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "json prettify failed: %v\n", err)
+		binfile.LogError("json prettify failed: %v\n", err)
 		return
 	}
 	_, _ = buf.WriteTo(os.Stdout)
@@ -186,20 +187,20 @@ func seekDoc(br binfile.BinReader) {
 		End:     -1,
 	})
 	if next < 0 {
-		fmt.Printf("no document found")
+		binfile.LogInfo("no document found")
 		return
 	}
 	if doc == nil {
-		fmt.Printf("position %d found nil document\n", next)
+		binfile.LogInfo("position %d found nil document\n", next)
 		return
 	}
-	fmt.Printf("%10d\t%s\n", next, doc.Content)
+	binfile.LogInfo("%10d\t%s\n", next, doc.Content)
 }
 
 func packageDocs(bw binfile.BinWriter) {
 	ct, ok := binfile.CompressTypes[client.Package.InputCompressType]
 	if !ok {
-		_, _ = fmt.Fprintf(os.Stderr, "unknown compression type %s\n", client.CompressType)
+		binfile.LogError("unknown compression type %s\n", client.CompressType)
 		return
 	}
 
@@ -214,14 +215,14 @@ func packageDocs(bw binfile.BinWriter) {
 	}
 	err := binfile.Package(opt, bw)
 	if err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "package error: %v\n", err)
+		binfile.LogError("package error: %v\n", err)
 	}
 }
 
 func execReadCmd(filename string, worker func(reader binfile.BinReader)) {
 	br := newReader(filename, client.CompressType)
 	if br == nil {
-		_, _ = fmt.Fprintf(os.Stderr, "file not found: %s\n", filename)
+		binfile.LogError("file not found: %s\n", filename)
 		return
 	}
 	defer br.Close()
@@ -230,7 +231,7 @@ func execReadCmd(filename string, worker func(reader binfile.BinReader)) {
 func execWriteCmd(filename string, worker func(reader binfile.BinWriter)) {
 	bw := newWriter(filename, client.CompressType)
 	if bw == nil {
-		_, _ = fmt.Fprintf(os.Stderr, "file not found: %s\n", filename)
+		binfile.LogError("file not found: %s\n", filename)
 		return
 	}
 	defer func() {
@@ -267,10 +268,10 @@ func main() {
 	case "repack <source> <target>":
 		err := binfile.Repack(client.Repack)
 		if err != nil {
-			_, _ = fmt.Fprintf(os.Stderr, "repack error: %v", err)
+			binfile.LogError("repack error: %v", err)
 		}
 		break
 	default:
-		fmt.Println(version.BuildVersion())
+		binfile.LogInfo("%s\n", version.BuildVersion())
 	}
 }

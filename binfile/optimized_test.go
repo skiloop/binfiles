@@ -82,7 +82,7 @@ func initTestFile(testFile string, t *testing.T) (picked int, doc *Doc) {
 	if err != nil {
 		t.Fatalf("关闭写入器失败: %v", err)
 	}
-	fmt.Printf("initTestFile done with %d documents\n", i)
+	LogInfo("initTestFile done with %d documents\n", i)
 	return picked, doc
 }
 

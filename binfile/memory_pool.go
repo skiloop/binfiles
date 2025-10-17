@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"os"
 	"sync"
 )
 
@@ -67,7 +66,7 @@ func (mp *MemoryPool) initDecompressors() {
 			New: func() any {
 				decompressor, err := getDecompressor(ct, nil)
 				if err != nil {
-					_, _ = fmt.Fprintf(os.Stderr, "init decompressor error: compressType %d, %v\n", ct, err)
+					LogError("init decompressor error: compressType %d, %v\n", ct, err)
 					return nil
 				}
 				return decompressor
@@ -135,7 +134,7 @@ func (mp *MemoryPool) PutDocBuffer(buf []byte) {
 func (mp *MemoryPool) GetDecompressor(compressType int) Decompressor {
 	obj := mp.decompressors[compressType].Get()
 	if obj == nil {
-		_, _ = fmt.Fprintf(os.Stderr, "get decompressor error: compressType %d\n", compressType)
+		LogError("get decompressor error: compressType %d\n", compressType)
 		return nil
 	}
 	return obj.(Decompressor)
@@ -145,7 +144,7 @@ func (mp *MemoryPool) GetDecompressor(compressType int) Decompressor {
 func (mp *MemoryPool) GetDocCompressor(compressType int) DocCompressor {
 	obj := mp.docCompressors[compressType].Get()
 	if obj == nil {
-		_, _ = fmt.Fprintf(os.Stderr, "get doc compressor error: compressType %d\n", compressType)
+		LogError("get doc compressor error: compressType %d\n", compressType)
 		return nil
 	}
 	return obj.(DocCompressor)

@@ -1,8 +1,6 @@
 package binfile
 
 import (
-	"fmt"
-	"os"
 	"regexp"
 	"sync/atomic"
 )
@@ -78,11 +76,11 @@ func Repack(opt RepackCmd) error {
 		tt:      CompressTypes[opt.TargetCompressType],
 		st:      CompressTypes[opt.SourceCompressType],
 	}
-	fmt.Printf("file pattern: %s\n", opt.Pattern)
+	LogInfo("file pattern: %s\n", opt.Pattern)
 	if opt.Pattern != "" {
 		p, err := regexp.Compile(opt.Pattern)
 		if err != nil {
-			_, _ = fmt.Fprintf(os.Stderr, "regex error: %v\n", err)
+			LogError("regex error: %v\n", err)
 			return err
 		}
 		r.pattern = p

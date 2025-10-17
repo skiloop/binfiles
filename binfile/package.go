@@ -2,7 +2,6 @@ package binfile
 
 import (
 	"errors"
-	"fmt"
 	"io"
 	"io/fs"
 	"os"
@@ -33,13 +32,13 @@ func Package(option *PackageOption, bw BinWriter) (err error) {
 	}, func() {
 		searchFiles(option.Path, ch, stopCh, pattern)
 	})
-	fmt.Printf("%s packaging done\n", option.Path)
+	LogInfo("%s packaging done\n", option.Path)
 	return nil
 }
 
 func searchFiles(root string, ch, stop chan interface{}, pattern *regexp.Regexp) {
 	if Debug {
-		fmt.Printf("searching files in %s\n", root)
+		LogInfo("searching files in %s\n", root)
 	}
 	defer func() {
 		ch <- nil
@@ -55,7 +54,7 @@ func searchFiles(root string, ch, stop chan interface{}, pattern *regexp.Regexp)
 		// filter out files those not match the pattern
 		if path == "" || !fs.FileMode.IsRegular(d.Type()) || pattern != nil && !pattern.MatchString(path) {
 			if Debug {
-				fmt.Printf("%s skipped\n", path)
+				LogInfo("%s skipped\n", path)
 			}
 			return nil
 		}
@@ -71,9 +70,9 @@ func searchFiles(root string, ch, stop chan interface{}, pattern *regexp.Regexp)
 	})
 
 	if err != nil && !errors.Is(err, errWorkersStopped) {
-		_, _ = fmt.Fprintf(os.Stderr, "search root error: %v\n", err)
+		LogError("search root error: %v\n", err)
 	}
-	fmt.Println("root search done")
+	LogInfo("root search done")
 }
 
 func readContent(path string, compress int) ([]byte, error) {
@@ -86,7 +85,7 @@ func readContent(path string, compress int) ([]byte, error) {
 	}()
 	reader, err := getDecompressor(compress, in)
 	if err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "decompress reader error: %v\n", err)
+		LogError("decompress reader error: %v\n", err)
 		return nil, err
 	}
 
@@ -97,7 +96,7 @@ func readContent(path string, compress int) ([]byte, error) {
 	// 读取所有数据到缓冲区
 	_, err = io.Copy(buf, reader)
 	if err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "decompress error: %v\n", err)
+		LogError("decompress error: %v\n", err)
 		return nil, err
 	}
 
@@ -122,7 +121,7 @@ func packageWorker(ch chan interface{}, compress, no int, dw BinWriter) {
 		src := <-ch
 		if src == nil {
 			if Verbose {
-				fmt.Printf("worker %d stopped\n", no)
+				LogInfo("worker %d stopped\n", no)
 			}
 			ch <- nil
 			break
@@ -133,16 +132,16 @@ func packageWorker(ch chan interface{}, compress, no int, dw BinWriter) {
 		}
 
 		if Verbose {
-			fmt.Printf("[%d] process file %s\n", no, path)
+			LogInfo("[%d] process file %s\n", no, path)
 		}
 
 		doc, err := readDoc(path, compress)
 		if err != nil {
-			_, _ = fmt.Fprintf(os.Stderr, "[%d] read file %s error: %v\n", no, path, err)
+			LogError("[%d] read file %s error: %v\n", no, path, err)
 			continue
 		}
 		if _, err := dw.Write(doc); err != nil {
-			_, _ = fmt.Fprintf(os.Stderr, "[%d] worker error: %v\n", no, err)
+			LogError("[%d] worker error: %v\n", no, err)
 			break
 		}
 	}

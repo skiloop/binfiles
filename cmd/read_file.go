@@ -5,9 +5,9 @@ import (
 	"compress/gzip"
 	"encoding/base64"
 	"encoding/binary"
-	"fmt"
-	"github.com/alecthomas/kong"
 	"os"
+
+	"github.com/alecthomas/kong"
 )
 
 var cli struct {
@@ -18,21 +18,21 @@ func main() {
 	_ = kong.Parse(&cli)
 	w, err := os.OpenFile(cli.binFile, os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
-		fmt.Println(err.Error())
+		LogInfo(err.Error())
 		return
 	}
 	var num int32
 	num = 4
 	err = binary.Write(w, binary.LittleEndian, num)
 	if err != nil {
-		fmt.Println(err.Error())
+		LogInfo(err.Error())
 		return
 	}
 	_ = w.Close()
 
 	r, err := os.OpenFile(cli.binFile, os.O_RDONLY, 0644)
 	if err != nil {
-		fmt.Println(err.Error())
+		LogInfo(err.Error())
 		return
 	}
 	var n int32
@@ -43,5 +43,5 @@ func main() {
 	_, _ = wt.Write(make([]byte, 64))
 	_ = wt.Flush()
 	_ = wt.Close()
-	fmt.Println(base64.StdEncoding.EncodeToString(bw.Bytes()))
+	LogInfo(base64.StdEncoding.EncodeToString(bw.Bytes()))
 }

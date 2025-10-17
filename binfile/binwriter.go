@@ -2,7 +2,6 @@ package binfile
 
 import (
 	"errors"
-	"fmt"
 	"io"
 	"os"
 	"sync"
@@ -103,9 +102,9 @@ func (dw *binWriter) Write(doc *Doc) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	// fmt.Printf("write doc: %s, %d -> %d\n", string(compressedDoc.Key), len(doc.Content), len(compressedDoc.Content))
+	// LogInfo("write doc: %s, %d -> %d\n", string(compressedDoc.Key), len(doc.Content), len(compressedDoc.Content))
 	if err = dw.lock(); err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "lock file error: %v\n", err)
+		LogError("lock file error: %v\n", err)
 		return 0, err
 	}
 	defer func() {
@@ -155,7 +154,7 @@ func (dw *ccBinWriter) Open() error {
 			_ = file.Close()
 			return err
 		}
-		fmt.Printf("open package writer: %d, %v\n", dw.packageCompressType, pw)
+		LogInfo("open package writer: %d, %v\n", dw.packageCompressType, pw)
 		dw.compressor = pw.(Compressor)
 	}
 
@@ -185,7 +184,7 @@ func (dw *ccBinWriter) Write(doc *Doc) (int, error) {
 		return 0, err
 	}
 	if err = dw.lock(); err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "lock file error: %v\n", err)
+		LogError("lock file error: %v\n", err)
 		return 0, err
 	}
 

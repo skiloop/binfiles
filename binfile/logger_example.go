@@ -10,7 +10,7 @@ import (
 // 示例1：替换现有的错误输出
 func ExampleReplaceErrorOutput() {
 	// 原来的代码：
-	// _, _ = fmt.Fprintf(os.Stderr, "decompress reader error: %v\n", err)
+	// LogError("decompress reader error: %v\n", err)
 
 	// 替换为：
 	err := fmt.Errorf("示例错误")
@@ -23,7 +23,7 @@ func ExampleReplaceErrorOutput() {
 // 示例2：替换现有的信息输出
 func ExampleReplaceInfoOutput() {
 	// 原来的代码：
-	// fmt.Printf("Processing file: %s\n", filename)
+	// LogInfo("Processing file: %s\n", filename)
 
 	// 替换为：
 	filename := "test.bin"
@@ -33,7 +33,7 @@ func ExampleReplaceInfoOutput() {
 // 示例3：替换现有的调试输出
 func ExampleReplaceDebugOutput() {
 	// 原来的代码：
-	// fmt.Printf("Worker %d started\n", workerID)
+	// LogInfo("Worker %d started\n", workerID)
 
 	// 替换为：
 	workerID := 1
@@ -105,7 +105,7 @@ func ExampleBulkReplacement() {
 	// 1. 查找: fmt.Fprintf(os.Stderr,
 	//    替换为: LogError(
 
-	// 2. 查找: fmt.Printf(
+	// 2. 查找: LogInfo(
 	//    替换为: LogInfo(
 
 	// 3. 查找: fmt.Println(
@@ -118,7 +118,7 @@ func ExampleBulkReplacement() {
 	// 原来：fmt.Fprintf(os.Stderr, "decompress error: %v\n", err)
 	// 替换：LogError("decompress error: %v", err)
 
-	// 原来：fmt.Printf("Processing %d documents\n", count)
+	// 原来：LogInfo("Processing %d documents\n", count)
 	// 替换：LogInfo("Processing %d documents", count)
 
 	// 原来：fmt.Println("Operation completed")

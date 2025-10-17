@@ -1,7 +1,6 @@
 package binfile
 
 import (
-	"fmt"
 	"io"
 	"math"
 	"os"
@@ -35,7 +34,7 @@ func (r *docRepack) worker(no int) {
 
 	end := r.pos.Add(r.step)
 	offset := end - r.step
-	fmt.Printf("[%d] worker starts on %d to %d\n", no, offset, end)
+	LogInfo("[%d] worker starts on %d to %d\n", no, offset, end)
 	br, err := NewBinReader(r.source, r.st)
 	if err != nil {
 		return
@@ -49,7 +48,7 @@ func (r *docRepack) worker(no int) {
 		if err != nil {
 			pos, dc := reader.next(offset, end, -1, -1, nil)
 			if dc == nil {
-				fmt.Printf("[%d] no more doc after %d\n", no, offset)
+				LogInfo("[%d] no more doc after %d\n", no, offset)
 				break
 			}
 			offset, doc = pos, dc
@@ -67,13 +66,13 @@ func (r *docRepack) worker(no int) {
 		case r.docCh <- doc:
 			count++
 		case <-r.stopCh: // Handle stop signal
-			fmt.Printf("[%d] worker stopped\n", no)
+			LogInfo("[%d] worker stopped\n", no)
 			// tell other workers to stop
 			r.stopCh <- nil
 			break
 		}
 	}
-	fmt.Printf("[%d] worker done with %d documents\n", no, count)
+	LogInfo("[%d] worker done with %d documents\n", no, count)
 
 }
 func (r *docRepack) createWriter() (DocWriterCloser, error) {
@@ -98,7 +97,7 @@ func (r *docRepack) merge() {
 
 	bw, err := r.createWriter()
 	if err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "fail to create writer: %v\n", err)
+		LogError("fail to create writer: %v\n", err)
 		return
 	}
 	defer func() {
@@ -107,28 +106,28 @@ func (r *docRepack) merge() {
 	defer func() {
 		r.stopCh <- nil
 	}()
-	fmt.Println("merger starts")
+	LogInfo("merger starts")
 	count := 0
 	var doc *Doc
 	for {
 		select {
 		case doc = <-r.docCh:
 		case <-r.stopCh:
-			fmt.Printf("merger got stop signal")
+			LogInfo("merger got stop signal")
 			break
 		}
 		if doc == nil {
 			break
 		}
-		// fmt.Printf("merge doc: %s, %d -> %d\n", string(doc.Key), len(doc.Content), len(doc.Content))
+		// LogInfo("merge doc: %s, %d -> %d\n", string(doc.Key), len(doc.Content), len(doc.Content))
 		_, err = bw.Write(doc)
 		if err != nil {
-			_, _ = fmt.Fprintf(os.Stderr, "fail to write %s: %v\n", doc.Key, err)
+			LogError("fail to write %s: %v\n", doc.Key, err)
 			continue
 		}
 		count += 1
 	}
-	fmt.Printf("merger done with %d files\n", count)
+	LogInfo("merger done with %d files\n", count)
 }
 
 func getFileSize(filename string) (int64, error) {
