@@ -29,6 +29,11 @@ func (w NoneCompressReader) Close() error {
 	return nil
 }
 
+func (w *NoneCompressReader) Reset(src io.Reader) error {
+	w.src = src
+	return nil
+}
+
 func NewNoneCompressReader(src io.Reader) *NoneCompressReader {
 	return &NoneCompressReader{src: src}
 }

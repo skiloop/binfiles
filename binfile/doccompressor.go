@@ -21,21 +21,12 @@ func (c OptimizedDocCompressor) Decompress(doc *Doc, compressType int, verbose b
 	if NONE == compressType {
 		return doc, nil
 	}
-	reader, err := getDecompressReader(compressType, bytes.NewReader(doc.Content))
-	if err != nil || reader == nil {
-		if Verbose {
-			_, _ = fmt.Fprintf(os.Stderr, "decompressor reader creation error: %v\n", err)
-		}
-		return nil, ErrDecompressReader
-	}
-
-	var data []byte
-	data, err = io.ReadAll(reader)
+	data, err := GlobalMemoryPool.DecompressWithPool(doc.Content, compressType)
 	if err != nil {
 		if verbose {
 			_, _ = fmt.Fprintf(os.Stderr, "decompress error: %v\n", err)
 		}
-		return nil, ErrValueDecompress
+		return nil, err
 	}
 	return &Doc{Key: CloneBytes(doc.Key), Content: data}, nil
 }
@@ -67,8 +58,8 @@ func (c oldCompressor) Decompress(doc *Doc, compressType int, verbose bool) (dst
 	if NONE == compressType {
 		return doc, nil
 	}
-	reader, err := getDecompressReader(compressType, bytes.NewReader(doc.Content))
-	if err != nil || reader == nil {
+	reader, err := getDecompressor(compressType, bytes.NewReader(doc.Content))
+	if err != nil {
 		if Verbose {
 			_, _ = fmt.Fprintf(os.Stderr, "decompressor reader creation error: %v\n", err)
 		}

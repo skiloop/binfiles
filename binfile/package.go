@@ -84,7 +84,7 @@ func readContent(path string, compress int) ([]byte, error) {
 	defer func() {
 		_ = in.Close()
 	}()
-	reader, err := getDecompressReader(compress, in)
+	reader, err := getDecompressor(compress, in)
 	if err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "decompress reader error: %v\n", err)
 		return nil, err

@@ -2,14 +2,10 @@ package binfile
 
 import (
 	"bytes"
-	"compress/gzip"
+	"fmt"
 	"io"
+	"os"
 	"sync"
-
-	"github.com/andybalholm/brotli"
-	"github.com/dsnet/compress/bzip2"
-	"github.com/pierrec/lz4"
-	"github.com/ulikunitz/xz"
 )
 
 // MemoryPool 提供内存和压缩器的复用池，减少频繁的内存分配
@@ -17,11 +13,12 @@ type MemoryPool struct {
 	// 字节缓冲区池，用于临时数据存储
 	buffers sync.Pool
 	// 压缩器缓冲区池，用于压缩操作
-	compressors sync.Pool
-	// 解压缩器池，按压缩类型分别存储
-	decompressors map[int]*sync.Pool
+	compressBufPool sync.Pool
 	// 文档缓冲区池，用于文档数据处理
 	docBuffers sync.Pool
+
+	// 解压缩器池，按压缩类型分别存储
+	decompressors map[int]*sync.Pool
 }
 
 // NewMemoryPool 创建新的内存池
@@ -38,7 +35,7 @@ func NewMemoryPool() *MemoryPool {
 	}
 
 	// 初始化压缩器缓冲区池
-	mp.compressors = sync.Pool{
+	mp.compressBufPool = sync.Pool{
 		New: func() interface{} {
 			return &bytes.Buffer{}
 		},
@@ -51,47 +48,27 @@ func NewMemoryPool() *MemoryPool {
 		},
 	}
 
-	// 初始化各种解压缩器池
-	mp.initDecompressorPools()
+	mp.initDecompressors()
 
 	return mp
 }
 
-// initDecompressorPools 初始化各种解压缩器池
-func (mp *MemoryPool) initDecompressorPools() {
-	// GZIP 解压缩器池
-	mp.decompressors[GZIP] = &sync.Pool{
-		New: func() interface{} {
-			return &gzip.Reader{}
-		},
-	}
-
-	// BROTLI 解压缩器池
-	mp.decompressors[BROTLI] = &sync.Pool{
-		New: func() interface{} {
-			return &brotli.Reader{}
-		},
-	}
-
-	// BZIP2 解压缩器池
-	mp.decompressors[BZIP2] = &sync.Pool{
-		New: func() interface{} {
-			return &bzip2.Reader{}
-		},
-	}
-
-	// LZ4 解压缩器池
-	mp.decompressors[LZ4] = &sync.Pool{
-		New: func() interface{} {
-			return &lz4.Reader{}
-		},
-	}
-
-	// XZ 解压缩器池
-	mp.decompressors[XZ] = &sync.Pool{
-		New: func() interface{} {
-			return &xz.Reader{}
-		},
+// initDecompressors 初始化解压缩器池
+func (mp *MemoryPool) initDecompressors() {
+	mp.decompressors = make(map[int]*sync.Pool)
+	for _, compressType := range []int{NONE, LZ4, BROTLI, XZ, BZIP2, GZIP} {
+		// 创建局部变量避免闭包问题
+		ct := compressType
+		mp.decompressors[compressType] = &sync.Pool{
+			New: func() any {
+				decompressor, err := getDecompressor(ct, nil)
+				if err != nil {
+					_, _ = fmt.Fprintf(os.Stderr, "init decompressor error: compressType %d, %v\n", ct, err)
+					return nil
+				}
+				return decompressor
+			},
+		}
 	}
 }
 
@@ -111,7 +88,7 @@ func (mp *MemoryPool) PutBuffer(buf []byte) {
 
 // GetCompressorBuffer 获取压缩器缓冲区
 func (mp *MemoryPool) GetCompressorBuffer() *bytes.Buffer {
-	buf := mp.compressors.Get().(*bytes.Buffer)
+	buf := mp.compressBufPool.Get().(*bytes.Buffer)
 	buf.Reset()
 	return buf
 }
@@ -121,7 +98,7 @@ func (mp *MemoryPool) PutCompressorBuffer(buf *bytes.Buffer) {
 	if buf.Cap() > 1024*1024 { // 不要缓存过大的缓冲区
 		return
 	}
-	mp.compressors.Put(buf)
+	mp.compressBufPool.Put(buf)
 }
 
 // GetDocBuffer 获取文档缓冲区
@@ -138,19 +115,19 @@ func (mp *MemoryPool) PutDocBuffer(buf []byte) {
 	mp.docBuffers.Put(buf)
 }
 
-// GetDecompressor 获取解压缩器（如果支持池化）
-func (mp *MemoryPool) GetDecompressor(compressType int) interface{} {
-	if pool, exists := mp.decompressors[compressType]; exists {
-		return pool.Get()
+// GetDecompressor 获取解压缩器
+func (mp *MemoryPool) GetDecompressor(compressType int) Decompressor {
+	obj := mp.decompressors[compressType].Get()
+	if obj == nil {
+		_, _ = fmt.Fprintf(os.Stderr, "get decompressor error: compressType %d\n", compressType)
+		return nil
 	}
-	return nil
+	return obj.(Decompressor)
 }
 
 // PutDecompressor 归还解压缩器
-func (mp *MemoryPool) PutDecompressor(compressType int, decompressor interface{}) {
-	if pool, exists := mp.decompressors[compressType]; exists {
-		pool.Put(decompressor)
-	}
+func (mp *MemoryPool) PutDecompressor(compressType int, decompressor Decompressor) {
+	mp.decompressors[compressType].Put(decompressor)
 }
 
 // CompressWithPool 使用内存池进行压缩
@@ -191,18 +168,23 @@ func (mp *MemoryPool) DecompressWithPool(data []byte, compressType int) ([]byte,
 	if compressType == NONE {
 		return data, nil
 	}
-
-	reader, err := getDecompressReader(compressType, bytes.NewReader(data))
+	br := bytes.NewReader(data)
+	decompressor := mp.GetDecompressor(compressType)
+	if decompressor == nil {
+		return nil, fmt.Errorf("get decompressor error: compressType %d", compressType)
+	}
+	defer mp.PutDecompressor(compressType, decompressor)
+	err := decompressor.Reset(br)
 	if err != nil {
 		return nil, err
 	}
-
 	// 使用缓冲区读取解压缩后的数据
 	buf := mp.GetCompressorBuffer()
 	defer mp.PutCompressorBuffer(buf)
 
 	// 读取所有数据到缓冲区
-	_, err = io.Copy(buf, reader)
+	defer decompressor.Close()
+	_, err = io.Copy(buf, decompressor)
 	if err != nil {
 		return nil, err
 	}

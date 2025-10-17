@@ -1,12 +1,7 @@
 package binfile
 
 import (
-	"compress/gzip"
 	"fmt"
-	"github.com/andybalholm/brotli"
-	"github.com/dsnet/compress/bzip2"
-	"github.com/pierrec/lz4"
-	"github.com/ulikunitz/xz"
 	"io"
 	"os"
 )
@@ -39,25 +34,6 @@ var CompressTypes = map[string]int{
 	"xz":     XZ,
 	"brotli": BROTLI,
 	"lz4":    LZ4,
-}
-
-func getDecompressReader(ct int, src io.Reader) (reader io.Reader, err error) {
-	switch ct {
-	case NONE:
-		return NewNoneCompressReader(src), nil
-	case LZ4:
-		return lz4.NewReader(src), nil
-	case BROTLI:
-		return brotli.NewReader(src), nil
-	case XZ:
-		return xz.NewReader(src)
-	case BZIP2:
-		return bzip2.NewReader(src, nil)
-	case GZIP:
-		fallthrough
-	default:
-		return gzip.NewReader(src)
-	}
 }
 
 func debug(format string, a ...any) {

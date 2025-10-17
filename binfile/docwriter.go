@@ -25,11 +25,12 @@ func NewDocWriter(w io.Writer) DocWriter {
 
 type compressDocWriter struct {
 	docWriter
-	compressType int
+	compressType  int
+	docCompressor DocCompressor
 }
 
 func (w *compressDocWriter) Write(doc *Doc) (int, error) {
-	dc, err := CompressDoc(doc, w.compressType)
+	dc, err := w.docCompressor.CompressDoc(doc, w.compressType)
 	if err != nil {
 		return 0, err
 	}
