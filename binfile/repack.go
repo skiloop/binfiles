@@ -17,6 +17,7 @@ type RepackCmd struct {
 	SourceCompressType  string `short:"i" help:"source bin compression type" enum:"gzip,bzip2,bz2,br,brotli,none" default:"gzip"`
 	TargetCompressType  string `short:"t" help:"target bin compression type" enum:"gzip,bzip2,bz2,br,brotli,none" default:"none"`
 	PackageCompressType string `short:"c" help:"package compression type" enum:"gzip,bz2,bzip2,xz,lz4,br,brotli,none" default:"none"`
+	Optimized           bool   `help:"use optimized repack with memory pool" default:"false"`
 }
 
 const workerEndFlag = ""
@@ -43,7 +44,12 @@ func Repack(opt RepackCmd) error {
 			r.tt = NONE
 			r.st = NONE
 		}
-		return r.start(opt.Source, opt.Workers)
+		if opt.Optimized {
+			or := NewOptimizedFileRepack(&r)
+			return or.start(opt.Source, opt.Workers)
+		} else {
+			return r.start(opt.Source, opt.Workers)
+		}
 	}
 	// repack using multiple workers on reading docs from the same file
 	if opt.Mode == "doc" {
@@ -63,7 +69,11 @@ func Repack(opt RepackCmd) error {
 			r.tt = NONE
 			r.st = NONE
 		}
-		return r.start(opt.Workers)
+		if opt.Optimized {
+			return r.OptimizedStart(opt.Workers)
+		} else {
+			return r.start(opt.Workers)
+		}
 	}
 
 	r := pathRepack{

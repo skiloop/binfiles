@@ -12,8 +12,9 @@ func createRandDoc() *Doc {
 
 func writeRandDoc(writer io.Writer, count, ct int) (doc *Doc, err error) {
 	bw := compressDocWriter{
-		docWriter:    docWriter{w: writer},
-		compressType: ct,
+		docWriter:     docWriter{w: writer},
+		compressType:  ct,
+		docCompressor: OptimizedDocCompressor{},
 	}
 	for i := 0; i < count; i++ {
 		doc = createRandDoc()

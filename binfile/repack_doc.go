@@ -156,3 +156,23 @@ func (r *docRepack) start(workerCount int) (err error) {
 	<-r.stopCh
 	return nil
 }
+
+// OptimizedStart 优化版本的start方法，使用内存池
+func (r *docRepack) OptimizedStart(workerCount int) (err error) {
+	// set step
+	r.fileSize, err = getFileSize(r.source)
+	if err != nil {
+		return err
+	}
+	r.step = int64(math.Ceil(float64(r.fileSize) / float64(workerCount)))
+	// create channel
+	r.docCh = make(chan *Doc, workerCount+3)
+	r.stopCh = make(chan interface{})
+	// start run
+	go r.merge()
+	workers.RunJobs(workerCount, nil, r.OptimizedDocWorker, nil)
+	// tell merger to finish
+	r.docCh <- nil
+	<-r.stopCh
+	return nil
+}
