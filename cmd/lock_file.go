@@ -19,24 +19,24 @@ func main() {
 	_ = kong.Parse(&cc)
 	binfile.Verbose = cc.Verbose
 	if cc.Src == "" {
-		LogInfo("bin file is required")
+		binfile.LogInfo("bin file is required")
 		return
 	}
 	w, err := os.OpenFile(cc.Src, os.O_CREATE|os.O_APPEND, 0644)
 	if err != nil {
-		LogInfo("open failed: %v\n", err)
+		binfile.LogInfo("open failed: %v\n", err)
 		return
 	}
 
 	err = filelock.Lock(*w)
 	if err != nil {
-		LogInfo("lock failed: %v\n", err)
+		binfile.LogInfo("lock failed: %v\n", err)
 		return
 	}
 	defer func(f os.File) {
 		err := filelock.UnLock(f)
 		if err != nil {
-			LogInfo("unlock failed: %v\n", err)
+			binfile.LogInfo("unlock failed: %v\n", err)
 		}
 	}(*w)
 
