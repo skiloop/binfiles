@@ -137,7 +137,7 @@ func readNode(reader io.Reader, node *Node) (nr int, err error) {
 		return nr, ErrReadKey
 	}
 	if node.Size < 0 || node.Size > MaxDocSize || node.Size > KeySizeLimit {
-		_, _ = fmt.Fprintf(os.Stderr, "read node size error: %d\n", node.Size)
+		// _, _ = fmt.Fprintf(os.Stderr, "read node size error: %d\n", node.Size)
 		return nr, ErrReadKey
 	}
 	node.Data = make([]byte, node.Size)

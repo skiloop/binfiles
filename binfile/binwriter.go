@@ -32,23 +32,21 @@ func NewBinWriter(filename string, compressType int) BinWriter {
 }
 
 type binWriter struct {
-	filename      string
-	compressType  int
-	file          *os.File
-	mu            sync.Mutex
-	writer        io.Writer
-	docCompressor DocCompressor
+	filename     string
+	compressType int
+	file         *os.File
+	mu           sync.Mutex
+	writer       io.Writer
 }
 
 func createBinWriter(filename string, compressType int) *binWriter {
 
 	return &binWriter{
-		filename:      filename,
-		compressType:  compressType,
-		file:          nil,
-		mu:            sync.Mutex{},
-		writer:        nil,
-		docCompressor: &OptimizedDocCompressor{},
+		filename:     filename,
+		compressType: compressType,
+		file:         nil,
+		mu:           sync.Mutex{},
+		writer:       nil,
 	}
 }
 
@@ -101,11 +99,11 @@ func (dw *binWriter) Write(doc *Doc) (int, error) {
 	if dw.file == nil {
 		return 0, errors.New("not opened yet")
 	}
-	compressedDoc, err := dw.docCompressor.CompressDoc(doc, dw.compressType)
+	compressedDoc, err := CompressDoc(doc, dw.compressType)
 	if err != nil {
 		return 0, err
 	}
-	fmt.Printf("write doc: %s, %d -> %d\n", string(compressedDoc.Key), len(doc.Content), len(compressedDoc.Content))
+	// fmt.Printf("write doc: %s, %d -> %d\n", string(compressedDoc.Key), len(doc.Content), len(compressedDoc.Content))
 	if err = dw.lock(); err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "lock file error: %v\n", err)
 		return 0, err
@@ -146,6 +144,7 @@ func (dw *ccBinWriter) Open() error {
 	if err != nil {
 		return err
 	}
+	dw.compressor = nil
 	dw.file = file
 	var pw io.Writer
 	if dw.packageCompressType == NONE {
@@ -156,6 +155,8 @@ func (dw *ccBinWriter) Open() error {
 			_ = file.Close()
 			return err
 		}
+		fmt.Printf("open package writer: %d, %v\n", dw.packageCompressType, pw)
+		dw.compressor = pw.(Compressor)
 	}
 
 	dw.writer = pw
@@ -179,7 +180,7 @@ func (dw *ccBinWriter) Write(doc *Doc) (int, error) {
 	if dw.file == nil {
 		return 0, errors.New("not opened yet")
 	}
-	compressedDoc, err := dw.docCompressor.CompressDoc(doc, dw.compressType)
+	compressedDoc, err := CompressDoc(doc, dw.compressType)
 	if err != nil {
 		return 0, err
 	}

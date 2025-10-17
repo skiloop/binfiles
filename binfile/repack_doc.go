@@ -2,11 +2,12 @@ package binfile
 
 import (
 	"fmt"
-	"github.com/skiloop/binfiles/workers"
 	"io"
 	"math"
 	"os"
 	"sync/atomic"
+
+	"github.com/skiloop/binfiles/workers"
 )
 
 type docRepack struct {
@@ -119,6 +120,7 @@ func (r *docRepack) merge() {
 		if doc == nil {
 			break
 		}
+		// fmt.Printf("merge doc: %s, %d -> %d\n", string(doc.Key), len(doc.Content), len(doc.Content))
 		_, err = bw.Write(doc)
 		if err != nil {
 			_, _ = fmt.Fprintf(os.Stderr, "fail to write %s: %v\n", doc.Key, err)

@@ -79,17 +79,17 @@ type binReader struct {
 	docSeeker SeekReader
 }
 
-func (br *binReader) Close() {
-	if br.file != nil {
-		_ = br.file.Close()
-	}
-}
+// func (br *binReader) Close() {
+// 	if br.file != nil {
+// 		_ = br.file.Close()
+// 	}
+// }
 
 func (br *binReader) Read(offset int64, decompress bool) (*Doc, error) {
 	return br.docSeeker.ReadAt(offset, decompress)
 }
 
-func (br *binReader) close() {
+func (br *binReader) Close() {
 	if br.file != nil {
 		_ = br.file.Close()
 		br.file = nil
@@ -462,9 +462,9 @@ func (br *binReader) next(start, end int64, keySize, docSize int, regex *regexp.
 		if Debug {
 			nBytes := pos - start
 			if nBytes < 1024 {
-				fmt.Printf("%10d\t%10d nBytes search\n", pos, nBytes)
+				fmt.Printf("%10d\t%10d bytes search\n", pos, nBytes)
 			} else {
-				fmt.Printf("%10d\t%10dk search\n", pos, nBytes)
+				fmt.Printf("%10d\t%10dk search\n", pos, nBytes/1024)
 			}
 		}
 		pos += 1

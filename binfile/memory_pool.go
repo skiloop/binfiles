@@ -19,12 +19,16 @@ type MemoryPool struct {
 
 	// 解压缩器池，按压缩类型分别存储
 	decompressors map[int]*sync.Pool
+
+	// doc compressor pool
+	docCompressors map[int]*sync.Pool
 }
 
 // NewMemoryPool 创建新的内存池
 func NewMemoryPool() *MemoryPool {
 	mp := &MemoryPool{
-		decompressors: make(map[int]*sync.Pool),
+		decompressors:  make(map[int]*sync.Pool),
+		docCompressors: make(map[int]*sync.Pool),
 	}
 
 	// 初始化缓冲区池
@@ -49,7 +53,7 @@ func NewMemoryPool() *MemoryPool {
 	}
 
 	mp.initDecompressors()
-
+	mp.initDocCompressors()
 	return mp
 }
 
@@ -67,6 +71,18 @@ func (mp *MemoryPool) initDecompressors() {
 					return nil
 				}
 				return decompressor
+			},
+		}
+	}
+}
+
+// initDocDecompressors 初始化文档解压缩器池
+func (mp *MemoryPool) initDocCompressors() {
+	mp.docCompressors = make(map[int]*sync.Pool)
+	for _, compressType := range []int{NONE, LZ4, BROTLI, XZ, BZIP2, GZIP} {
+		mp.docCompressors[compressType] = &sync.Pool{
+			New: func() any {
+				return &OptimizedDocCompressor{}
 			},
 		}
 	}
@@ -123,6 +139,41 @@ func (mp *MemoryPool) GetDecompressor(compressType int) Decompressor {
 		return nil
 	}
 	return obj.(Decompressor)
+}
+
+// GetDocCompressor 获取文档压缩器
+func (mp *MemoryPool) GetDocCompressor(compressType int) DocCompressor {
+	obj := mp.docCompressors[compressType].Get()
+	if obj == nil {
+		_, _ = fmt.Fprintf(os.Stderr, "get doc compressor error: compressType %d\n", compressType)
+		return nil
+	}
+	return obj.(DocCompressor)
+}
+
+// PutDocCompressor 归还文档压缩器
+func (mp *MemoryPool) PutDocCompressor(compressType int, docCompressor DocCompressor) {
+	mp.docCompressors[compressType].Put(docCompressor)
+}
+
+// CompressDocWithPool 使用内存池进行文档压缩
+func (mp *MemoryPool) CompressDocWithPool(doc *Doc, compressType int) (*Doc, error) {
+	docCompressor := mp.GetDocCompressor(compressType)
+	if docCompressor == nil {
+		return nil, fmt.Errorf("get doc compressor error: compressType %d", compressType)
+	}
+	defer mp.PutDocCompressor(compressType, docCompressor)
+	return docCompressor.CompressDoc(doc, compressType)
+}
+
+// DecompressDocWithPool 使用内存池进行文档解压缩
+func (mp *MemoryPool) DecompressDocWithPool(doc *Doc, compressType int) (*Doc, error) {
+	docCompressor := mp.GetDocCompressor(compressType)
+	if docCompressor == nil {
+		return nil, fmt.Errorf("get doc compressor error: compressType %d", compressType)
+	}
+	defer mp.PutDocCompressor(compressType, docCompressor)
+	return docCompressor.Decompress(doc, compressType, false)
 }
 
 // PutDecompressor 归还解压缩器

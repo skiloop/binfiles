@@ -76,3 +76,17 @@ func (c oldCompressor) Decompress(doc *Doc, compressType int, verbose bool) (dst
 	}
 	return &Doc{Key: CloneBytes(doc.Key), Content: data}, nil
 }
+
+func DecompressDoc(doc *Doc, compressType int, verbose bool) (dst *Doc, err error) {
+	if NONE == compressType {
+		return doc, nil
+	}
+	return GlobalMemoryPool.DecompressDocWithPool(doc, compressType)
+}
+
+func CompressDoc(doc *Doc, compressType int) (dst *Doc, err error) {
+	if NONE == compressType {
+		return doc, nil
+	}
+	return GlobalMemoryPool.CompressDocWithPool(doc, compressType)
+}

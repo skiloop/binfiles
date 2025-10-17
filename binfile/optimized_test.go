@@ -2,6 +2,7 @@ package binfile
 
 import (
 	"fmt"
+	"io"
 	"math/rand"
 	"os"
 	"reflect"
@@ -62,23 +63,26 @@ func initTestFile(testFile string, t *testing.T) (picked int, doc *Doc) {
 	if err != nil {
 		t.Fatalf("打开写入器失败: %v", err)
 	}
-	total := 1
+	total := 1000
 	picked = rand.Intn(total)
-	for i := 0; i < total; i++ {
+	i := 0
+	for i < total {
 		content := RandStringBytesMaskImprSrc(2048)
 		_doc := &Doc{Key: []byte(fmt.Sprintf("test%d", i)), Content: []byte(content)}
-		if i == picked {
-			doc = _doc
-		}
 		_, err = bw.Write(_doc)
 		if err != nil {
 			t.Fatalf("写入文档失败: %v", err)
 		}
+		if i == picked {
+			doc = _doc
+		}
+		i++
 	}
 	err = bw.Close()
 	if err != nil {
 		t.Fatalf("关闭写入器失败: %v", err)
 	}
+	fmt.Printf("initTestFile done with %d documents\n", i)
 	return picked, doc
 }
 
@@ -87,50 +91,58 @@ func TestOptimizedRepackFunctionality(t *testing.T) {
 	outputRoot := "/tmp/optimized_repack_test"
 	testFile := fmt.Sprintf("%s/test.bin", outputRoot)
 	os.MkdirAll(outputRoot, 0755)
-	// defer os.RemoveAll(outputRoot)
+	defer os.RemoveAll(outputRoot)
 	// 初始化测试文件
 	picked, doc := initTestFile(testFile, t)
 	if doc == nil {
 		t.Fatalf("初始化测试文件失败")
 	}
-	t.Run("BasicOptimizedRepack", func(t *testing.T) {
-		outputFile := fmt.Sprintf("%s/basic_optimized.bin", outputRoot)
+	repackModes := []string{"doc", "file"}
+	for _, mode := range repackModes {
+		t.Run(fmt.Sprintf("OptimizedRepack_%s", mode), func(t *testing.T) {
+			outputFile := fmt.Sprintf("%s/optimized_%s.bin", outputRoot, mode)
+			opt := RepackCmd{
+				Source:              testFile,
+				Target:              outputFile,
+				Workers:             2,
+				Mode:                mode,
+				SourceCompressType:  "none",
+				TargetCompressType:  "gzip",
+				PackageCompressType: "none",
+				Limit:               0,
+			}
+			err := Repack(opt)
+			if err != nil {
+				t.Fatalf("优化repack失败: %v", err)
+			}
+			stat, err := os.Stat(outputFile)
+			if err != nil {
+				t.Fatalf("获取输出文件状态失败: %v", err)
+			}
+			fileSize := stat.Size()
+			if fileSize == 0 {
+				t.Fatalf("输出文件大小为0: %s", outputFile)
+			}
+			t.Logf("输出文件大小: %d", fileSize)
+			br, err := NewBinReader(outputFile, GZIP)
+			if err != nil {
+				t.Fatalf("读取输出文件失败: %v", err)
+			}
+			pos := br.Search(SearchOption{Key: fmt.Sprintf("^test%d$", picked), Number: 1, Offset: 0})
+			if pos < 0 {
+				t.Fatalf("文档不存在: %d, pos: %d", picked, pos)
+			}
+			rdoc, err := br.Read(pos, true)
+			if err != nil {
+				t.Fatalf("读取文档失败: %v", err)
+			}
+			if !reflect.DeepEqual(doc, rdoc) {
+				t.Fatalf("文档不一致: %v != %v", doc, rdoc)
+			}
+			t.Logf("优化repack成功，输出文件: %s", outputFile)
+		})
+	}
 
-		opt := RepackCmd{
-			Source:             testFile,
-			Target:             outputFile,
-			Workers:            3,
-			Mode:               "file",
-			SourceCompressType: "none",
-			TargetCompressType: "gzip",
-			Limit:              0,
-		}
-
-		err := Repack(opt)
-		if err != nil {
-			t.Fatalf("优化repack失败: %v", err)
-		}
-
-		// 检查输出文件是否存在
-		if _, err := os.Stat(outputFile); os.IsNotExist(err) {
-			t.Fatalf("输出文件未创建: %s", outputFile)
-		}
-		br, err := NewBinReader(outputFile, GZIP)
-		if err != nil {
-			t.Fatalf("读取输出文件失败: %v", err)
-		}
-		var rdoc *Doc
-		pattern := fmt.Sprintf("^test%d$", picked)
-		_, rdoc = br.Next(&SeekOption{Offset: 0, Pattern: pattern, KeySize: int(KeySizeLimit), DocSize: -1, End: -1})
-		if rdoc == nil {
-			t.Fatalf("文档不存在: %d, %s", picked, pattern)
-		}
-		if !reflect.DeepEqual(doc, rdoc) {
-			t.Fatalf("文档不一致: %v != %v", doc, rdoc)
-		}
-
-		t.Logf("优化repack成功，输出文件: %s", outputFile)
-	})
 }
 
 // TestOptimizedReadWriteAllCompressionTypes 测试所有压缩类型的读写优化
@@ -189,21 +201,18 @@ func TestOptimizedReadWriteAllCompressionTypes(t *testing.T) {
 				if err != nil {
 					t.Fatalf("打开读取器失败: %v", err)
 				}
+				reader, _ := br.(*binReader)
 				defer br.Close()
-
+				pos := int64(0)
 				for i, expectedDoc := range testDocs {
-					_, actualDoc := br.Next(&SeekOption{
-						Offset:  int64(i),
-						Pattern: "",
-						KeySize: int(KeySizeLimit),
-						DocSize: -1,
-						End:     -1,
-					})
-
-					if actualDoc == nil {
-						t.Fatalf("读取文档失败: index %d", i)
+					actualDoc, err := reader.docSeeker.ReadAt(pos, true)
+					if err != nil || actualDoc == nil {
+						t.Fatalf("读取文档失败: index %d, %v", i, err)
 					}
-
+					pos, err = reader.docSeeker.Seek(0, io.SeekCurrent)
+					if err != nil {
+						t.Fatalf("获取当前位置失败: %v", err)
+					}
 					if !reflect.DeepEqual(expectedDoc, actualDoc) {
 						t.Errorf("文档不匹配: index %d\nExpected: %v\nActual: %v",
 							i, expectedDoc, actualDoc)
@@ -253,56 +262,46 @@ func TestOptimizedVsOriginalPerformance(t *testing.T) {
 	// 创建测试数据
 	testData := []byte(RandStringBytesMaskImprSrc(4096))
 	compressionTypes := []int{NONE, GZIP, BROTLI, BZIP2, LZ4, XZ}
+	tests := []struct {
+		testType     string
+		name         string
+		compressFunc func([]byte, int) ([]byte, error)
+	}{
+		{testType: "Original", name: "原始压缩", compressFunc: CompressOriginal},
+		{testType: "Optimized", name: "优化压缩", compressFunc: Compress},
+	}
 
 	for _, compType := range compressionTypes {
 		compTypeName := getCompressionTypeName(compType)
 		t.Run(fmt.Sprintf("Compression_%s", compTypeName), func(t *testing.T) {
 
-			// 测试原始方法
-			t.Run("Original", func(t *testing.T) {
-				start := time.Now()
-				var m1, m2 runtime.MemStats
-				runtime.GC()
-				runtime.ReadMemStats(&m1)
+			// 测试方法
+			for _, test := range tests {
+				t.Run(test.testType, func(t *testing.T) {
+					start := time.Now()
+					var m1, m2 runtime.MemStats
+					runtime.GC()
+					runtime.ReadMemStats(&m1)
 
-				result, err := CompressOriginal(testData, compType)
-				if err != nil {
-					t.Fatalf("原始压缩失败: %v", err)
-				}
+					result, err := test.compressFunc(testData, compType)
+					if err != nil {
+						t.Fatalf("%s压缩失败: %v", test.name, err)
+					}
 
-				duration := time.Since(start)
-				runtime.GC()
-				runtime.ReadMemStats(&m2)
+					duration := time.Since(start)
+					runtime.GC()
+					runtime.ReadMemStats(&m2)
 
-				t.Logf("原始压缩 - %s:", compTypeName)
-				t.Logf("  时间: %v", duration)
-				t.Logf("  内存分配: %d KB", (m2.HeapAlloc-m1.HeapAlloc)/1024)
-				t.Logf("  GC次数: %d", m2.NumGC-m1.NumGC)
-				t.Logf("  压缩后大小: %d bytes", len(result))
-			})
+					t.Logf("%s - %s:", test.name, compTypeName)
+					t.Logf("  时间: %v", duration)
+					t.Logf("  总分配次数: %d", m2.Mallocs-m1.Mallocs)
+					t.Logf("  总释放次数: %d", m2.Frees-m1.Frees)
+					t.Logf("  当前堆大小: %d KB", m2.HeapAlloc/1024)
+					t.Logf("  GC次数: %d", m2.NumGC-m1.NumGC)
+					t.Logf("  压缩后大小: %d bytes", len(result))
+				})
+			}
 
-			// 测试优化方法
-			t.Run("Optimized", func(t *testing.T) {
-				start := time.Now()
-				var m1, m2 runtime.MemStats
-				runtime.GC()
-				runtime.ReadMemStats(&m1)
-
-				result, err := Compress(testData, compType)
-				if err != nil {
-					t.Fatalf("优化压缩失败: %v", err)
-				}
-
-				duration := time.Since(start)
-				runtime.GC()
-				runtime.ReadMemStats(&m2)
-
-				t.Logf("优化压缩 - %s:", compTypeName)
-				t.Logf("  时间: %v", duration)
-				t.Logf("  内存分配: %d KB", (m2.HeapAlloc-m1.HeapAlloc)/1024)
-				t.Logf("  GC次数: %d", m2.NumGC-m1.NumGC)
-				t.Logf("  压缩后大小: %d bytes", len(result))
-			})
 		})
 	}
 }
@@ -315,6 +314,7 @@ func TestMemoryPoolConcurrency(t *testing.T) {
 
 		done := make(chan bool, goroutines)
 		testData := []byte(RandStringBytesMaskImprSrc(1024))
+		compTypes := []int{GZIP, BROTLI, BZIP2, LZ4, XZ}
 
 		for i := 0; i < goroutines; i++ {
 			go func(id int) {
@@ -322,7 +322,6 @@ func TestMemoryPoolConcurrency(t *testing.T) {
 
 				for j := 0; j < iterations; j++ {
 					// 测试不同的压缩类型
-					compTypes := []int{GZIP, BROTLI, BZIP2}
 					compType := compTypes[j%len(compTypes)]
 
 					result, err := Compress(testData, compType)
@@ -357,11 +356,12 @@ func TestDocumentCompressionOptimization(t *testing.T) {
 	// 创建测试文档
 	testDoc := &Doc{
 		Key:     []byte("test_document"),
-		Content: []byte(RandStringBytesMaskImprSrc(2048)),
+		Content: []byte(RandStringBytesMaskImprSrc(2048 * 1024)),
 	}
 
 	compressionTypes := []int{NONE, GZIP, BROTLI, BZIP2, LZ4, XZ}
-
+	optCompressor := &OptimizedDocCompressor{}
+	oldCompressor := &oldCompressor{}
 	for _, compType := range compressionTypes {
 		compTypeName := getCompressionTypeName(compType)
 		t.Run(fmt.Sprintf("DocCompression_%s", compTypeName), func(t *testing.T) {
@@ -370,7 +370,6 @@ func TestDocumentCompressionOptimization(t *testing.T) {
 			t.Run("Original", func(t *testing.T) {
 				start := time.Now()
 
-				oldCompressor := &oldCompressor{}
 				compressedDoc, err := oldCompressor.CompressDoc(testDoc, compType)
 				if err != nil {
 					t.Fatalf("原始文档压缩失败: %v", err)
@@ -385,7 +384,6 @@ func TestDocumentCompressionOptimization(t *testing.T) {
 			t.Run("Optimized", func(t *testing.T) {
 				start := time.Now()
 
-				optCompressor := &OptimizedDocCompressor{}
 				compressedDoc, err := optCompressor.CompressDoc(testDoc, compType)
 				if err != nil {
 					t.Fatalf("优化文档压缩失败: %v", err)
