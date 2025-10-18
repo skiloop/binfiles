@@ -31,13 +31,14 @@ func TestDecompress(t *testing.T) {
 
 func TestCompress(t *testing.T) {
 	compressTypes := []int{NONE, GZIP, BROTLI, BZIP2, LZ4, XZ}
+	// compressTypes := []int{GZIP}
 	data := []byte(RandStringBytesMaskImprSrc(1024))
 
 	for _, compressType := range compressTypes {
 		t.Run(getCompressionTypeName(compressType), func(t *testing.T) {
 			compTypeName := getCompressionTypeName(compressType)
-			compressed, err := Compress(data, compressType)
-			if err != nil {
+			compressed, err := GlobalMemoryPool.CompressWithPool(data, compressType)
+			if err != nil || len(compressed) == 0 {
 				t.Fatalf("compress error: %v", err)
 			}
 			decompressed, err := DecompressOriginal(compressed, compressType)

@@ -18,6 +18,8 @@ type MemoryPool struct {
 
 	// 解压缩器池，按压缩类型分别存储
 	decompressors map[int]*sync.Pool
+	// 压缩器池，按压缩类型分别存储
+	compressors map[int]*sync.Pool
 
 	// doc compressor pool
 	docCompressors map[int]*sync.Pool
@@ -27,6 +29,7 @@ type MemoryPool struct {
 func NewMemoryPool() *MemoryPool {
 	mp := &MemoryPool{
 		decompressors:  make(map[int]*sync.Pool),
+		compressors:    make(map[int]*sync.Pool),
 		docCompressors: make(map[int]*sync.Pool),
 	}
 
@@ -52,6 +55,7 @@ func NewMemoryPool() *MemoryPool {
 	}
 
 	mp.initDecompressors()
+	mp.initCompressors()
 	mp.initDocCompressors()
 	return mp
 }
@@ -62,7 +66,7 @@ func (mp *MemoryPool) initDecompressors() {
 	for _, compressType := range []int{NONE, LZ4, BROTLI, XZ, BZIP2, GZIP} {
 		// 创建局部变量避免闭包问题
 		ct := compressType
-		mp.decompressors[compressType] = &sync.Pool{
+		mp.decompressors[ct] = &sync.Pool{
 			New: func() any {
 				decompressor, err := getDecompressor(ct, nil)
 				if err != nil {
@@ -75,11 +79,29 @@ func (mp *MemoryPool) initDecompressors() {
 	}
 }
 
+func (mp *MemoryPool) initCompressors() {
+	mp.compressors = make(map[int]*sync.Pool)
+	for _, compressType := range []int{NONE, LZ4, BROTLI, XZ, BZIP2, GZIP} {
+		ct := compressType
+		mp.compressors[ct] = &sync.Pool{
+			New: func() any {
+				compressor, err := getCompressor(ct, &bytes.Buffer{})
+				if err != nil {
+					LogError("init compressor error: compressType %d, %v\n", ct, err)
+					return nil
+				}
+				return compressor
+			},
+		}
+	}
+}
+
 // initDocDecompressors 初始化文档解压缩器池
 func (mp *MemoryPool) initDocCompressors() {
 	mp.docCompressors = make(map[int]*sync.Pool)
 	for _, compressType := range []int{NONE, LZ4, BROTLI, XZ, BZIP2, GZIP} {
-		mp.docCompressors[compressType] = &sync.Pool{
+		ct := compressType
+		mp.docCompressors[ct] = &sync.Pool{
 			New: func() any {
 				return &OptimizedDocCompressor{}
 			},
@@ -180,26 +202,50 @@ func (mp *MemoryPool) PutDecompressor(compressType int, decompressor Decompresso
 	mp.decompressors[compressType].Put(decompressor)
 }
 
+// GetCompressor 获取压缩器
+func (mp *MemoryPool) GetCompressor(compressType int) Compressor {
+	obj := mp.compressors[compressType].Get()
+	if obj == nil {
+		LogError("get compressor error: compressType %d\n", compressType)
+		return nil
+	}
+	return obj.(Compressor)
+}
+
+// PutCompressor 归还压缩器
+func (mp *MemoryPool) PutCompressor(compressType int, compressor Compressor) {
+	mp.compressors[compressType].Put(compressor)
+}
+
 // CompressWithPool 使用内存池进行压缩
 func (mp *MemoryPool) CompressWithPool(data []byte, compressType int) ([]byte, error) {
 	buf := mp.GetCompressorBuffer()
 	defer mp.PutCompressorBuffer(buf)
-
-	w, err := getCompressor(compressType, buf)
+	compressor := mp.GetCompressor(compressType)
+	if compressor == nil {
+		return nil, fmt.Errorf("get compressor error: compressType %d", compressType)
+	}
+	defer mp.PutCompressor(compressType, compressor)
+	err := compressor.Reset(buf)
 	if err != nil {
+		LogError("reset compressor error: compressType %d, %v\n", compressType, err)
 		return nil, err
 	}
-
-	_, err = w.Write(data)
+	_, err = compressor.Write(data)
 	if err != nil {
+		LogError("write data error: compressType %d, %v\n", compressType, err)
 		return nil, err
 	}
-
-	err = w.Close()
+	err = compressor.Flush()
 	if err != nil {
+		LogError("flush compressor error: compressType %d, %v\n", compressType, err)
 		return nil, err
 	}
-
+	err = compressor.Close()
+	if err != nil {
+		LogError("close compressor error: compressType %d, %v\n", compressType, err)
+		return nil, err
+	}
 	// 获取压缩后的数据
 	dst := buf.Bytes()
 	if len(dst) == 0 {

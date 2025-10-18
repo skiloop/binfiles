@@ -5,6 +5,7 @@ import (
 	"io"
 	"math/rand"
 	"os"
+	"path"
 	"reflect"
 	"runtime"
 	"testing"
@@ -28,6 +29,19 @@ const (
 var seededRand *rand.Rand = rand.New(
 	rand.NewSource(time.Now().UnixNano()),
 )
+
+func getTestDir(name string) string {
+	// windows
+	if runtime.GOOS == "windows" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			panic(err)
+		}
+		return path.Join(home, "AppData", "Local", "Temp", fmt.Sprintf("test_%s", name))
+	}
+	// other os
+	return path.Join("/tmp", fmt.Sprintf("test_%s", name))
+}
 
 // RandStringBytesMaskImprSrc 快速生成指定长度的随机字符串
 func RandStringBytesMaskImprSrc(n int) string {
@@ -88,8 +102,8 @@ func initTestFile(testFile string, total int, t *testing.T) (picked int, doc *Do
 // TestOptimizedRepackFunctionality 测试优化后repack的功能
 func TestOptimizedRepackFunctionality(t *testing.T) {
 	RedirectToDevNull()
-	outputRoot := "/tmp/optimized_repack_test"
-	testFile := fmt.Sprintf("%s/test.bin", outputRoot)
+	outputRoot := getTestDir("optimized_repack_test")
+	testFile := path.Join(outputRoot, "test.bin")
 	os.MkdirAll(outputRoot, 0755)
 	defer os.RemoveAll(outputRoot)
 	// 初始化测试文件
@@ -163,7 +177,7 @@ func TestOptimizedRepackFunctionality(t *testing.T) {
 
 // TestOptimizedReadWriteAllCompressionTypes 测试所有压缩类型的读写优化
 func TestOptimizedReadWriteAllCompressionTypes(t *testing.T) {
-	outputRoot := "/tmp/optimized_rw_test"
+	outputRoot := getTestDir("optimized_rw_test")
 	os.MkdirAll(outputRoot, 0755)
 	defer os.RemoveAll(outputRoot)
 
@@ -191,7 +205,7 @@ func TestOptimizedReadWriteAllCompressionTypes(t *testing.T) {
 	for _, compType := range compressionTypes {
 		t.Run(fmt.Sprintf("Compression_%s", compType.name), func(t *testing.T) {
 			// 测试写入
-			testFile := fmt.Sprintf("%s/test_%s.bin", outputRoot, compType.name)
+			testFile := path.Join(outputRoot, fmt.Sprintf("test_%s.bin", compType.name))
 
 			// 测试原始写入
 			t.Run("Write_Original", func(t *testing.T) {
@@ -271,7 +285,7 @@ func TestOptimizedReadWriteAllCompressionTypes(t *testing.T) {
 
 // TestOptimizedVsOriginalPerformance 测试优化版本与原始版本的性能对比
 func TestOptimizedVsOriginalPerformance(t *testing.T) {
-	outputRoot := "/tmp/performance_test"
+	outputRoot := getTestDir("performance_test")
 	os.MkdirAll(outputRoot, 0755)
 	defer os.RemoveAll(outputRoot)
 
@@ -365,7 +379,7 @@ func TestMemoryPoolConcurrency(t *testing.T) {
 
 // TestDocumentCompressionOptimization 测试文档压缩优化
 func TestDocumentCompressionOptimization(t *testing.T) {
-	outputRoot := "/tmp/doc_compression_test"
+	outputRoot := getTestDir("doc_compression_test")
 	os.MkdirAll(outputRoot, 0755)
 	defer os.RemoveAll(outputRoot)
 	// RedirectToDevNull()
@@ -415,7 +429,7 @@ func TestDocumentCompressionOptimization(t *testing.T) {
 
 // BenchmarkOptimizedCompression 基准测试优化压缩性能
 func BenchmarkOptimizedCompression(b *testing.B) {
-	testData := []byte(RandStringBytesMaskImprSrc(4096))
+	testData := []byte(RandStringBytesMaskImprSrc(4096 * 1024))
 	compressionTypes := []int{GZIP, BROTLI, BZIP2, LZ4, XZ}
 
 	for _, compType := range compressionTypes {
@@ -431,7 +445,7 @@ func BenchmarkOptimizedCompression(b *testing.B) {
 
 		b.Run(fmt.Sprintf("Optimized_%s", compTypeName), func(b *testing.B) {
 			for i := 0; i < b.N; i++ {
-				_, err := Compress(testData, compType)
+				_, err := GlobalMemoryPool.CompressWithPool(testData, compType)
 				if err != nil {
 					b.Fatalf("压缩失败: %v", err)
 				}
@@ -442,10 +456,10 @@ func BenchmarkOptimizedCompression(b *testing.B) {
 
 // TestRepackPerformanceComparison 测试repack功能的性能对比
 func TestRepackPerformanceComparison(t *testing.T) {
-	outputRoot := "/tmp/repack_performance_output"
+	outputRoot := getTestDir("repack_performance_output")
 	os.MkdirAll(outputRoot, 0755)
 	defer os.RemoveAll(outputRoot)
-	testFile := fmt.Sprintf("%s/test.bin", outputRoot)
+	testFile := path.Join(outputRoot, "test.bin")
 	RedirectToDevNull()
 
 	// 创建测试文件（如果不存在）
@@ -544,10 +558,10 @@ func TestRepackPerformanceComparison(t *testing.T) {
 // BenchmarkRepackPerformance 基准测试repack性能
 func BenchmarkRepackPerformance(b *testing.B) {
 	SetGlobalLogLevel(ERROR)
-	outputRoot := "/tmp/benchmark_repack_test"
+	outputRoot := getTestDir("benchmark_repack_test")
 	os.MkdirAll(outputRoot, 0755)
 	defer os.RemoveAll(outputRoot)
-	testFile := fmt.Sprintf("%s/test.bin", outputRoot)
+	testFile := path.Join(outputRoot, "test.bin")
 	createBenchmarkTestFile(testFile, NONE)
 
 	benchmarks := []struct {
@@ -565,7 +579,7 @@ func BenchmarkRepackPerformance(b *testing.B) {
 	for _, bench := range benchmarks {
 		b.Run(bench.name, func(b *testing.B) {
 			for i := 0; i < b.N; i++ {
-				outputFile := fmt.Sprintf("/tmp/benchmark_output_%d.bin", i)
+				outputFile := path.Join(outputRoot, fmt.Sprintf("benchmark_output_%d.bin", i))
 
 				opt := RepackCmd{
 					Source:              testFile,
