@@ -4,3 +4,9 @@ binutil.exe
 *.test
 brotli
 *.bin
+*.exe
+repack/
+build/
+.idea/
+*.log
+*.out
