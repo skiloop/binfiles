@@ -3,6 +3,7 @@
 # STEP 1: Determinate the required values
 
 PACKAGE="github.com/skiloop/binfiles"
+BIN_NAME="binutil"
 VERSION="$(git describe --tags --always --abbrev=0 --match='v[0-9]*.[0-9]*.[0-9]*' 2> /dev/null | sed 's/^.//')"
 COMMIT_HASH="$(git rev-parse --short HEAD)"
 BUILD_TIMESTAMP=$(date '+%Y-%m-%dT%H:%M:%S')
@@ -31,11 +32,11 @@ case "${TARGET_OS}" in
 "windows")
   GOOS=windows
   GOARCH=amd64
-  TARGET="binutil.exe"
+  TARGET="${BIN_NAME}.exe"
   ;;
 "*")
   GOOS=darwin
   GOARCH=amd64
   ;;
 esac
-GOOS=${GOOS} GOARCH=${GOARCH} go build -ldflags="${LDFLAGS[*]}" -o "${TARGET:-binutil}"
+GOOS=${GOOS} GOARCH=${GOARCH} go build -ldflags="${LDFLAGS[*]}" -o "${TARGET:-${BIN_NAME}}"
