@@ -63,6 +63,7 @@ var client struct {
 	CompressType string            `short:"z" help:"compression type, none if do not want to compress" enum:"gzip,xz,br,lz4,bz2,none" default:"gzip"`
 	Verbose      bool              `short:"v" help:"verbose" default:"false"`
 	Debug        bool              `short:"d" help:"debug" default:"false"`
+	LogLevel     string            `help:"log level" enum:"debug,info,warn,error,fatal" default:"info"`
 	KeySizeLimit int32             `short:"L" help:"max size of document key in bytes" default:"1000"`
 	Step         int32             `short:"s" help:"how many docs to skip before next doc is processed, for count command means verbose step" default:"0"`
 	Version      VersionCmd        `cmd:"" help:"print version" default:"withargs"`
@@ -244,6 +245,8 @@ func main() {
 	ctx := kong.Parse(&client)
 	binfile.Debug = client.Debug
 	binfile.Verbose = client.Verbose || client.Debug
+
+	binfile.SetGlobalLogLevel(binfile.LogLevelToEnum(client.LogLevel))
 
 	binfile.KeySizeLimit = client.KeySizeLimit
 	switch ctx.Command() {
