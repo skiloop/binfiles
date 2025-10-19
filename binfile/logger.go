@@ -47,6 +47,22 @@ func (l *Logger) SetOutput(output io.Writer) {
 	l.output = output
 }
 
+func LogLevelToEnum(level string) LogLevel {
+	switch level {
+	case "debug":
+		return DEBUG
+	case "info":
+		return INFO
+	case "warn":
+		return WARN
+	case "error":
+		return ERROR
+	case "fatal":
+		return FATAL
+	}
+	return INFO
+}
+
 // Enable 启用日志输出
 func (l *Logger) Enable() {
 	l.mu.Lock()
