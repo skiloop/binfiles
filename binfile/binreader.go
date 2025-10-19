@@ -467,7 +467,6 @@ func (br *binReader) next(start, end int64, keySize, docSize int, regex *regexp.
 				LogInfo("%10d\t%10dk search\n", pos, nBytes/1024)
 			}
 		}
-		pos += 1
 		if end > 0 && pos > end {
 			break
 		}
