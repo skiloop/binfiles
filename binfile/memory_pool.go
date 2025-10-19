@@ -219,6 +219,12 @@ func (mp *MemoryPool) PutCompressor(compressType int, compressor Compressor) {
 
 // CompressWithPool 使用内存池进行压缩
 func (mp *MemoryPool) CompressWithPool(data []byte, compressType int) ([]byte, error) {
+	// 对于bzip2和xz这种计算密集型算法，直接使用原始方法可能更高效
+	// 因为Reset操作的成本可能比创建新实例更高
+	if compressType == BZIP2 || compressType == XZ {
+		return CompressOriginal(data, compressType)
+	}
+
 	buf := mp.GetCompressorBuffer()
 	defer mp.PutCompressorBuffer(buf)
 	compressor := mp.GetCompressor(compressType)

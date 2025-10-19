@@ -148,6 +148,9 @@ func getCompressor(compressType int, w io.Writer) (Compressor, error) {
 }
 
 func Compress(data []byte, compressType int) ([]byte, error) {
+	if compressType == NONE {
+		return data, nil
+	}
 	// 使用内存池优化
 	return GlobalMemoryPool.CompressWithPool(data, compressType)
 }
