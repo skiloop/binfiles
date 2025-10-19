@@ -40,7 +40,8 @@ func (r *fileRepack) nextBinWriter(optimized bool) BinWriter {
 func (r *fileRepack) seeder() {
 	LogInfo("reader starts")
 	count := 0
-	for {
+	running := true
+	for running {
 		offset, _ := r.reader.Seek(0, io.SeekCurrent)
 		doc, err := r.reader.Read(true)
 		if err == io.EOF {
@@ -57,14 +58,16 @@ func (r *fileRepack) seeder() {
 		if doc == nil {
 			break
 		}
+
+		// 确保数据不丢失：要么发送成功，要么收到停止信号
 		select {
 		case r.docCh <- doc:
+			count += 1
+			if r.limit > 0 && count >= r.limit {
+				running = false
+			}
 		case <-r.stopSeeder:
-			break
-		}
-		count += 1
-		if r.limit > 0 && count >= r.limit {
-			break
+			running = false
 		}
 	}
 	LogInfo("reader done with %d documents\n", count)
@@ -183,12 +186,17 @@ func (r *fileRepack) start(source string, workerCount int, optimized bool) error
 		_ = r.Close()
 	}(r.reader)
 
+	// 增加channel容量，避免阻塞
+	r.docCh = make(chan *Doc, workerCount*2)
+	r.filenameCh = make(chan string, workerCount*2)
+	r.stopSeeder = make(chan interface{})
+
 	waitMergerCh := make(chan interface{})
 	go r.merge(waitMergerCh)
 
 	workers.RunJobs(workerCount, r.stopSeeder, func(no int) {
 		r.worker(no, optimized)
-	}, r.seeder)	
+	}, r.seeder)
 
 	r.filenameCh <- workerEndFlag
 	<-waitMergerCh

@@ -43,7 +43,13 @@ func (r *docRepack) worker(no int) {
 	count := 0
 	var doc *Doc
 	_ = reader.resetOffset(offset)
-	for {
+	running := true
+	print_doc := true
+	for running {
+		offset, err = reader.docSeeker.Seek(0, io.SeekCurrent)
+		if err != nil {
+			break
+		}
 		doc, err = reader.docSeeker.Read(true)
 		if err != nil {
 			pos, dc := reader.next(offset, end, -1, -1, nil)
@@ -52,24 +58,23 @@ func (r *docRepack) worker(no int) {
 				break
 			}
 			offset, doc = pos, dc
-		} else {
-			offset, err = reader.docSeeker.Seek(0, io.SeekCurrent)
-			if err != nil {
-				break
-			}
 		}
-		if offset > end {
+		if offset >= end {
+			LogDebug("[%d]worker reached end %d at %d\n", no, end, offset)
 			break
 		}
 		// Safely send to the channel
 		select {
 		case r.docCh <- doc:
+			if Verbose && print_doc {
+				LogInfo("[%d] send fisrt doc: %d, %s\n", no, offset, doc.Key)
+				print_doc = false
+			}
 			count++
 		case <-r.stopCh: // Handle stop signal
 			LogInfo("[%d] worker stopped\n", no)
-			// tell other workers to stop
-			r.stopCh <- nil
-			break
+			running = false
+			return
 		}
 	}
 	LogInfo("[%d] worker done with %d documents\n", no, count)
@@ -112,7 +117,7 @@ func (r *docRepack) merge(optimized bool) {
 	defer func() {
 		r.stopCh <- nil
 	}()
-	LogInfo("merger starts")
+	LogInfo("merger starts\n")
 	count := 0
 	var doc *Doc
 	for {
@@ -120,7 +125,7 @@ func (r *docRepack) merge(optimized bool) {
 		case doc = <-r.docCh:
 		case <-r.stopCh:
 			LogInfo("merger got stop signal")
-			break
+			return
 		}
 		if doc == nil {
 			break
@@ -151,9 +156,9 @@ func (r *docRepack) start(workerCount int, optimized bool) (err error) {
 		return err
 	}
 	r.step = int64(math.Ceil(float64(r.fileSize) / float64(workerCount)))
-	// create channel
-	r.docCh = make(chan *Doc, workerCount+3)
-	r.stopCh = make(chan interface{})
+	// create channel with larger buffer
+	r.docCh = make(chan *Doc, workerCount*2)
+	r.stopCh = make(chan interface{}, 1) // 增加容量避免阻塞
 	// start run
 	go r.merge(optimized)
 	workers.RunJobs(workerCount, nil, r.worker, nil)
