@@ -15,10 +15,11 @@ import (
 )
 
 type PackageOption struct {
-	Path          string `doc:"source path or tar file name"`
-	Pattern       string `doc:"file pattern,those match will be packaged. all files include if empty"`
 	InputCompress int    `doc:"source file compression type package" default:"0"`
 	WorkerCount   int    `doc:"worker count" default:"0"`
+	Path          string `doc:"source path or tar file name"`
+	Pattern       string `doc:"file pattern,those match will be packaged. all files include if empty"`
+	TarCompress   string `doc:"tar file compression type package" default:"gzip"`
 }
 
 // Package files to bin file
@@ -26,6 +27,9 @@ func Package(option *PackageOption, bw BinWriter) (err error) {
 	if err = bw.Open(); err != nil {
 		return err
 	}
+	defer func() {
+		_ = bw.Close()
+	}()
 	var pattern *regexp.Regexp
 	if len(option.Pattern) > 0 {
 		if pattern, err = regexp.Compile(option.Pattern); err != nil {
@@ -33,8 +37,8 @@ func Package(option *PackageOption, bw BinWriter) (err error) {
 		}
 	}
 
-	ch := make(chan interface{}, option.WorkerCount*3)
-	stopCh := make(chan interface{})
+	ch := make(chan any, option.WorkerCount*3)
+	stopCh := make(chan any)
 	stat, err := os.Stat(option.Path)
 	if err != nil {
 		return err
@@ -49,38 +53,67 @@ func Package(option *PackageOption, bw BinWriter) (err error) {
 	}
 }
 
-func packageTar(option *PackageOption, bw BinWriter, ch, stop chan interface{}, pattern *regexp.Regexp) (err error) {
+func packageTar(option *PackageOption, bw BinWriter, ch, stop chan any, pattern *regexp.Regexp) (err error) {
+	LogDebug("package tar file\n")
+	workers.RunJobs(option.WorkerCount, stop, func(no int) {
+		packageWorker(ch, no, bw)
+	}, func() {
+		tarSeeder(option, ch, stop, pattern)
+	})
+	LogInfo("package done\n")
+	return nil
+}
+func tarSeeder(option *PackageOption, ch, stop chan any, pattern *regexp.Regexp) {
+	LogInfo("seeder from %s starts\n", option.Path)
 	in, err := os.Open(option.Path)
+	defer func() {
+		LogDebug("seeder stops\n")
+		ch <- nil
+	}()
 	if err != nil {
-		return err
+		LogError("open tar file error: %v\n", err)
+		return
 	}
-	defer in.Close()
+	defer func() {
+		_ = in.Close()
+	}()
 	buf := GlobalMemoryPool.GetCompressorBuffer()
 	defer GlobalMemoryPool.PutCompressorBuffer(buf)
-	WalkTar(in, func(h *tar.Header, r io.Reader) error {
+	WalkTarCompressed(in, CompressionFormat(option.TarCompress), func(h *tar.Header, r io.Reader) error {
+		if h.Typeflag == tar.TypeDir {
+			LogDebug("skip directory %s\n", h.Name)
+			return nil
+		}
 		key := filepath.Base(h.Name)
+		if pattern != nil && !pattern.MatchString(key) {
+			LogDebug("skip %s\n", h.Name)
+			return nil
+		}
 		buf.Reset()
 		_, err = io.Copy(buf, r)
 		if err != nil {
 			LogError("copy tar file error: %v\n", err)
 			return err
 		}
-		ch <- &Doc{Key: []byte(key), Content: CloneBytes(buf.Bytes())}
-		return nil
+		select {
+		case ch <- &Doc{Key: []byte(key), Content: CloneBytes(buf.Bytes())}:
+			return nil
+		case <-stop:
+			return errWorkersStopped
+		}
 	})
-	return nil
 }
 
-func packageDirectory(option *PackageOption, bw BinWriter, ch, stop chan interface{}, pattern *regexp.Regexp) (err error) {
+func packageDirectory(option *PackageOption, bw BinWriter, ch, stop chan any, pattern *regexp.Regexp) (err error) {
 	workers.RunJobs(option.WorkerCount, stop, func(no int) {
-		packageWorker(ch, option.InputCompress, no, bw)
+		packageWorker(ch, no, bw)
 	}, func() {
 		searchFiles(option.Path, ch, stop, option.InputCompress, pattern)
 	})
 	return nil
 }
 
-func searchFiles(root string, ch, stop chan interface{}, compress int, pattern *regexp.Regexp) {
+func searchFiles(root string, ch, stop chan any, compress int, pattern *regexp.Regexp) {
 	if Debug {
 		LogInfo("searching files in %s\n", root)
 	}
@@ -167,19 +200,23 @@ func readDoc(path string, compress int, buf *bytes.Buffer) (*Doc, error) {
 	return doc, nil
 }
 
-func packageWorker(ch chan interface{}, compress, no int, dw BinWriter) {
+func packageWorker(ch chan any, no int, dw BinWriter) {
+	LogDebug("worker %d starts\n", no)
+	var doc any
+	var count uint32
+	count = 0
 	for {
-		doc := <-ch
+		doc = <-ch
 		if doc == nil {
-			if Verbose {
-				LogInfo("worker %d stopped\n", no)
-			}
 			ch <- nil
 			break
 		}
+
 		if _, err := dw.Write(doc.(*Doc)); err != nil {
 			LogError("[%d] worker error: %v\n", no, err)
 			break
 		}
+		count += 1
 	}
+	LogInfo("worker %d done with %d docs\n", no, count)
 }

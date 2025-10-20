@@ -52,8 +52,9 @@ type SeekCmd struct {
 
 type PackageCmd struct {
 	Output            string `arg:"" help:"output bin file path"`
-	Path              string `arg:"" help:"input path where source files are"`
+	Path              string `arg:"" help:"input path or tar file path"`
 	InputCompressType string `short:"c" help:"input file compression type" enum:"gzip,bz2,xz,br,brotli,lz4,none" default:"none"`
+	TarCompressType   string `short:"t" help:"tar file compression type" enum:"gzip,bz2,xz,br,brotli,lz4,none" default:"gzip"`
 	Pattern           string `short:"p" help:"source file pattern, the matched will be packaged, all files package if empty" default:""`
 	WorkerCount       int    `short:"w" help:"number of workers, when 0 or negative number of system processors will be used" default:"0"`
 }
@@ -217,6 +218,7 @@ func packageDocs(bw binfile.BinWriter) {
 		Path:          client.Package.Path,
 		Pattern:       client.Package.Pattern,
 		InputCompress: ct,
+		TarCompress:   client.Package.TarCompressType,
 		WorkerCount:   client.Package.WorkerCount,
 	}
 	if opt.WorkerCount <= 0 {

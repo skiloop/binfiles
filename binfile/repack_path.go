@@ -21,7 +21,7 @@ type pathRepack struct {
 }
 
 func (p *pathRepack) seeder() {
-	searchFiles(p.src, p.fnCh, p.stopCh, p.pattern)
+	searchFiles(p.src, p.fnCh, p.stopCh, p.st, p.pattern)
 }
 
 func (p *pathRepack) worker(no int) {
