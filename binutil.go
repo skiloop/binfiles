@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"runtime"
 
@@ -132,7 +133,7 @@ func countDocs(br binfile.BinReader) {
 	}
 	count := br.Count(client.Count.Offset, client.Count.WorkerCount, step, client.Count.SkipError)
 	if count >= 0 {
-		binfile.LogInfo("%d\n", count)
+		fmt.Printf("%d\n", count)
 	}
 }
 
@@ -168,7 +169,7 @@ func searchDocs(br binfile.BinReader) {
 		return
 	}
 	if !client.Search.Pretty {
-		binfile.LogInfo("%10d\t%s\n", pos, doc.Content)
+		fmt.Printf("%10d\t%s\n", pos, doc.Content)
 		return
 	}
 	err, buf := JsonPrettify([]byte(doc.Content))
@@ -195,7 +196,7 @@ func seekDoc(br binfile.BinReader) {
 		binfile.LogInfo("position %d found nil document\n", next)
 		return
 	}
-	binfile.LogInfo("%10d\t%s\n", next, doc.Content)
+	fmt.Printf("%10d\t%s\n", next, doc.Content)
 }
 
 func packageDocs(bw binfile.BinWriter) {

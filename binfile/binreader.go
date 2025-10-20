@@ -340,11 +340,13 @@ func (br *binReader) List(opt *ReadOption, keyOnly bool) {
 		} else {
 			msg = fmt.Sprintf("[%d]\t%20d\t%s\n", count, current, string(doc.Key))
 		}
-		LogInfo(msg)
-		_ = br.skipDocs(opt.Step)
+		fmt.Printf(msg)
+		if opt.Step > 0 {
+			_ = br.skipDocs(opt.Step)
+		}
 	}
 	if !keyOnly {
-		LogInfo("total %d\n", count)
+		fmt.Printf("total %d\n", count)
 	}
 }
 
