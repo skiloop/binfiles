@@ -60,6 +60,12 @@ type PackageCmd struct {
 type VersionCmd struct {
 }
 
+type ListTarCmd struct {
+	Input  string `arg:"" help:"input file name"`
+	Format string `short:"f" help:"compression format" enum:"auto,gzip,xz,bzip2,zlib,none" default:"auto"`
+	Limit  int32  `short:"l" help:"limit of list number, 0 means unlimited" default:"0"`
+}
+
 var client struct {
 	CompressType string            `short:"z" help:"compression type, none if do not want to compress" enum:"gzip,xz,br,lz4,bz2,none" default:"gzip"`
 	Verbose      bool              `short:"v" help:"verbose" default:"false"`
@@ -75,6 +81,7 @@ var client struct {
 	Seek         SeekCmd           `cmd:"" aliases:"k,sk" help:"seek for next document from position"`
 	Package      PackageCmd        `cmd:"" aliases:"p" help:"package files into bin file"`
 	Repack       binfile.RepackCmd `cmd:"" aliases:"a" help:"repack bin file into other bin format"`
+	ListTar      ListTarCmd        `cmd:"" aliases:"t" help:"list tar archive"`
 }
 
 func newReader(filename string, compress string) binfile.BinReader {
@@ -274,6 +281,9 @@ func main() {
 		if err != nil {
 			binfile.LogError("repack error: %v", err)
 		}
+		break
+	case "list-tar <input>":
+		binfile.ListTar(client.ListTar.Input, binfile.CompressionFormat(client.ListTar.Format), int(client.ListTar.Limit))
 		break
 	default:
 		binfile.LogInfo("%s\n", version.BuildVersion())
