@@ -1,26 +1,32 @@
 version: "1.0"
 linter: go
-profile: Default
+
+profile:
+  name: Default
 
 # 排除不需要检查的文件和目录
 exclude:
-  - "build/"
-  - "*.exe"
-  - "*.bin"
-  - "*.prof"
-  - "*.log"
-  - "*.out"
-  - "*.gz"
-  - "*.br"
-  - "*.lz4"
-  - "*.xz"
-  - "*.bz2"
-  - "hs_err_pid*.log"
-  - ".idea/"
-  - "binutil"
-  - "binfiles.exe"
-  - "binfile.test.exe"
-  - "lock_file.exe"
+  - name: build
+    paths:
+      - "build/"
+  - name: binaries
+    paths:
+      - "*.exe"
+      - "*.bin"
+      - "*.prof"
+      - "*.log"
+      - "*.out"
+      - "*.gz"
+      - "*.br"
+      - "*.lz4"
+      - "*.xz"
+      - "*.bz2"
+      - "hs_err_pid*.log"
+      - ".idea/"
+      - "binutil"
+      - "binfiles.exe"
+      - "binfile.test.exe"
+      - "lock_file.exe"
 
 # 设置失败阈值（0表示任何问题都会导致失败）
 failThreshold: 0
