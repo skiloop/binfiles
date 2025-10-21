@@ -68,23 +68,21 @@ func (dw *binWriter) Open() error {
 
 func (dw *binWriter) lock() error {
 	dw.mu.Lock()
-	defer dw.mu.Unlock()
 	err := filelock.Lock(*dw.file)
-	if err == nil {
-		return nil
+	if err != nil {
+		dw.mu.Unlock()
+		return err
 	}
-	return err
+	return nil
 }
 
 func (dw *binWriter) unlock() error {
-	dw.mu.Lock()
-	defer dw.mu.Unlock()
 	err := filelock.UnLock(*dw.file)
-
-	if err == nil {
-		return nil
+	if err != nil {
+		return err
 	}
-	return err
+	dw.mu.Unlock()
+	return nil
 }
 
 type oldBinWriter struct {
