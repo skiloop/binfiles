@@ -262,31 +262,23 @@ func main() {
 	switch ctx.Command() {
 	case "list <input>", "list <input> <offset>":
 		execReadCmd(client.List.Input, listDocs)
-		break
 	case "read <input>", "read <input> <offset>":
 		execReadCmd(client.Read.Input, readDocs)
-		break
 	case "count <input>", "count <input> <offset>":
 		execReadCmd(client.Count.Input, countDocs)
-		break
 	case "seek <input>", "seek <input> <offset>":
 		execReadCmd(client.Seek.Input, seekDoc)
-		break
 	case "search <input> <key>", "search <input> <key> <offset>":
 		execReadCmd(client.Search.Input, searchDocs)
-		break
 	case "package <output> <path>":
 		execWriteCmd(client.Package.Output, packageDocs)
-		break
 	case "repack <source> <target>":
 		err := binfile.Repack(client.Repack)
 		if err != nil {
 			binfile.LogError("repack error: %v", err)
 		}
-		break
 	case "list-tar <input>":
 		binfile.ListTar(client.ListTar.Input, binfile.CompressionFormat(client.ListTar.Format), int(client.ListTar.Limit))
-		break
 	default:
 		binfile.LogInfo("%s\n", version.BuildVersion())
 	}
