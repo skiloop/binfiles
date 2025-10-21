@@ -1,13 +1,12 @@
 package binfile
 
 import (
-	"fmt"
-	"github.com/skiloop/binfiles/workers"
 	"io"
-	"os"
 	"path"
 	"path/filepath"
 	"regexp"
+
+	"github.com/skiloop/binfiles/workers"
 )
 
 type pathRepack struct {
@@ -22,11 +21,11 @@ type pathRepack struct {
 }
 
 func (p *pathRepack) seeder() {
-	searchFiles(p.src, p.fnCh, p.stopCh, p.pattern)
+	searchFiles(p.src, p.fnCh, p.stopCh, p.st, p.pattern)
 }
 
 func (p *pathRepack) worker(no int) {
-	fmt.Printf("[%d] worker starts\n", no)
+	LogInfo("[%d] worker starts\n", no)
 	count := 0
 	for {
 		fn := <-p.fnCh
@@ -35,20 +34,20 @@ func (p *pathRepack) worker(no int) {
 			break
 		}
 		if filename, ok := fn.(string); ok {
-			fmt.Printf("packaging %s\n", filename)
+			LogInfo("packaging %s\n", filename)
 			if err := p.pack(filename); err != nil {
-				_, _ = fmt.Fprintf(os.Stderr, "bin file error: %s\n", filename)
+				LogError("bin file error: %s\n", filename)
 				continue
 			}
 			count += 1
 		}
 	}
-	fmt.Printf("[%d] worker done with %d files\n", no, count)
+	LogInfo("[%d] worker done with %d files\n", no, count)
 }
 func (p *pathRepack) pack(filename string) (err error) {
 	dst := filepath.Join(p.dst, path.Base(filename)+getPackageSuffix(p.pt))
 	if CheckFileExists(dst) {
-		_, _ = fmt.Fprintf(os.Stderr, "file already exists: %s\n", dst)
+		LogError("file already exists: %s\n", dst)
 		return ErrFileExists
 	}
 	bw, err := NewCCBinWriter(dst, p.pt, p.tt)
@@ -75,7 +74,7 @@ func (p *pathRepack) pack(filename string) (err error) {
 		doc, err = br.docSeeker.Read(true)
 		if err != nil && err != io.EOF {
 			offset, _ := br.docSeeker.Seek(0, io.SeekCurrent)
-			_, _ = fmt.Fprintf(os.Stderr, "error at offset %d:  %v\n", offset, err)
+			LogError("error at offset %d:  %v\n", offset, err)
 			break
 		}
 		running = err != io.EOF
@@ -89,7 +88,7 @@ func (p *pathRepack) pack(filename string) (err error) {
 		}
 		count += 1
 	}
-	fmt.Printf("convert %s to %s with %d docs and skip %d docs\n", br.filename, bw.Filename(), count, skip)
+	LogInfo("convert %s to %s with %d docs and skip %d docs\n", br.filename, bw.Filename(), count, skip)
 	return nil
 }
 

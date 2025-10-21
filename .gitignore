@@ -1,0 +1,12 @@
+binutil
+binutil.exe
+*.prof
+*.test
+brotli
+*.bin
+*.exe
+repack/
+build/
+.idea/
+*.log
+*.out

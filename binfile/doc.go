@@ -1,23 +1,20 @@
 package binfile
 
 import (
-	"bytes"
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"io"
-	"os"
 	"unsafe"
 )
 
 var (
 	ErrDecompressReader = errors.New("fail to get decompress reader")
-	ErrCompressWriter   = errors.New("fail to get compress writer")
-	ErrValueDecompress  = errors.New("value decompress error")
-	ErrInvalidKey       = errors.New("invalid key")
-	ErrReadKey          = errors.New("key read error")
-	ErrReadDoc          = errors.New("doc read error")
-	ErrFileExists       = errors.New("file already exists")
+	//ErrCompressWriter   = errors.New("fail to get compress writer")
+	ErrValueDecompress = errors.New("value decompress error")
+	ErrInvalidKey      = errors.New("invalid key")
+	ErrReadKey         = errors.New("key read error")
+	ErrReadDoc         = errors.New("doc read error")
+	ErrFileExists      = errors.New("file already exists")
 	//ErrNotSupport      = errors.New("not support for this compression type")
 )
 
@@ -46,9 +43,21 @@ func ReadDoc(r io.Reader, doc *Doc) (int, error) {
 	if dc.ContentSize > MaxDocSize || dc.ContentSize <= 0 {
 		return nr, ErrReadDoc
 	}
-	var n int
 
-	doc.Content = make([]byte, 0, 512)
+	// 使用内存池获取缓冲区，预分配合适的大小
+	initialSize := int(dc.ContentSize)
+	if initialSize < 512 {
+		initialSize = 512
+	}
+
+	doc.Content = make([]byte, 0, initialSize)
+
+	// 预分配足够的空间
+	if int32(cap(doc.Content)) < dc.ContentSize {
+		doc.Content = make([]byte, 0, int(dc.ContentSize))
+	}
+
+	var n int
 	for {
 		if len(doc.Content) == cap(doc.Content) {
 			doc.Content = append(doc.Content, 0)[:len(doc.Content)]
@@ -66,24 +75,25 @@ func ReadDoc(r io.Reader, doc *Doc) (int, error) {
 	}
 
 	if err != nil && io.EOF != err {
-		_, _ = fmt.Fprintf(os.Stderr, "read doc content error: %v\n", err)
+		LogError("read doc content error: %v\n", err)
 		return nr, ErrReadDoc
 	}
 	doc.Key = dc.Key
 	return nr, nil
 }
 
-func readBytes(r io.Reader, size int) ([]byte, error) {
-	keyBuf := make([]byte, size)
-	n, err := r.Read(keyBuf)
-	if err != nil {
-		return nil, err
-	}
-	if n != size {
-		return nil, ErrReadKey
-	}
-	return keyBuf, nil
-}
+//
+//func readBytes(r io.Reader, size int) ([]byte, error) {
+//	keyBuf := make([]byte, size)
+//	n, err := r.Read(keyBuf)
+//	if err != nil {
+//		return nil, err
+//	}
+//	if n != size {
+//		return nil, ErrReadKey
+//	}
+//	return keyBuf, nil
+//}
 
 func readInt32(r io.Reader, num *int32) (int, error) {
 	err := binary.Read(r, binary.LittleEndian, num)
@@ -91,47 +101,6 @@ func readInt32(r io.Reader, num *int32) (int, error) {
 		return 0, err
 	}
 	return int(unsafe.Sizeof(*num)), nil
-}
-
-func Decompress(doc *Doc, compressType int) (dst *Doc, err error) {
-	if NONE == compressType {
-		return doc, nil
-	}
-	reader, err := getDecompressReader(compressType, bytes.NewReader(doc.Content))
-	if err != nil || reader == nil {
-		if Verbose {
-			_, _ = fmt.Fprintf(os.Stderr, "decompressor error: %v\n", err)
-		}
-		return nil, ErrDecompressReader
-	}
-
-	var data []byte
-	data, err = io.ReadAll(reader)
-	if err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "%v\n", err)
-		return nil, ErrValueDecompress
-	}
-	return &Doc{Key: CloneBytes(doc.Key), Content: data}, nil
-}
-
-func Compress(doc *Doc, compressType int) (dst *Doc, err error) {
-	if NONE == compressType {
-		return doc, nil
-	}
-	buf := bytes.Buffer{}
-	writer, err := getCompressWriter(compressType, &buf)
-	if err != nil {
-		return nil, err
-	}
-
-	_, err = writer.Write(doc.Content)
-	if err != nil {
-		return nil, err
-	}
-	if err = writer.Close(); err != nil {
-		return nil, err
-	}
-	return &Doc{Key: CloneBytes(doc.Key), Content: buf.Bytes()}, nil
 }
 
 // writeDoc Write document to writer
@@ -162,10 +131,11 @@ func readNode(reader io.Reader, node *Node) (nr int, err error) {
 		return nr, err
 	}
 	if err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "read int error: %v\n", err)
+		LogError("read int error: %v\n", err)
 		return nr, ErrReadKey
 	}
 	if node.Size < 0 || node.Size > MaxDocSize || node.Size > KeySizeLimit {
+		// LogError("read node size error: %d\n", node.Size)
 		return nr, ErrReadKey
 	}
 	node.Data = make([]byte, node.Size)
@@ -174,11 +144,11 @@ func readNode(reader io.Reader, node *Node) (nr int, err error) {
 	nr += n
 
 	if err == io.EOF && int32(n) < node.Size {
-		return nr, InvalidDocumentFound
+		return nr, ErrInvalidDocument
 	}
 
 	if err != nil && err != io.EOF {
-		_, _ = fmt.Fprintf(os.Stderr, "read node data error: %v\n", err)
+		LogError("read node data error: %v\n", err)
 		return nr, ErrReadDoc
 	}
 	return nr, nil

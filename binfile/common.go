@@ -1,12 +1,6 @@
 package binfile
 
 import (
-	"compress/gzip"
-	"fmt"
-	"github.com/andybalholm/brotli"
-	"github.com/dsnet/compress/bzip2"
-	"github.com/pierrec/lz4"
-	"github.com/ulikunitz/xz"
 	"io"
 	"os"
 )
@@ -41,62 +35,19 @@ var CompressTypes = map[string]int{
 	"lz4":    LZ4,
 }
 
-type Flusher interface {
-	Flush() error
-}
-
-func getDecompressReader(ct int, src io.Reader) (reader io.Reader, err error) {
-	switch ct {
-	case NONE:
-		return NewNoneCompressReader(src), nil
-	case LZ4:
-		return lz4.NewReader(src), nil
-	case BROTLI:
-		return brotli.NewReader(src), nil
-	case XZ:
-		return xz.NewReader(src)
-	case BZIP2:
-		return bzip2.NewReader(src, nil)
-	case GZIP:
-		fallthrough
-	default:
-		return gzip.NewReader(src)
-	}
-}
-
-func getCompressWriter(compressType int, w io.Writer) (io.WriteCloser, error) {
-	switch compressType {
-	case NONE:
-		return NewNoneCompressWriter(w), nil
-	case BZIP2:
-		return bzip2.NewWriter(w, nil)
-	case LZ4:
-		return lz4.NewWriter(w), nil
-	case BROTLI:
-		return brotli.NewWriter(w), nil
-	case XZ:
-		return xz.NewWriter(w)
-	case GZIP:
-		fallthrough
-	default:
-		//return newFlushWriter(gzip.NewWriter(w)), nil
-		return gzip.NewWriter(w), nil
-	}
-	//return nil, errors.New(fmt.Sprintf("unknown package compression type %d", compressType))
-}
 func debug(format string, a ...any) {
 	if Debug {
-		fmt.Printf(format, a...)
+		LogInfo(format, a...)
 	}
 }
 
 func errorf(format string, a ...any) {
-	_, _ = fmt.Fprintf(os.Stderr, format, a...)
+	LogError(format, a...)
 }
 
 type outWriter struct {
 	file       *os.File
-	compressor io.WriteCloser
+	compressor Compressor
 }
 
 func (o *outWriter) Write(p []byte) (n int, err error) {
@@ -107,6 +58,7 @@ func (o *outWriter) Close() error {
 	if nil == o.file {
 		return nil
 	}
+	_ = o.compressor.Flush()
 	_ = o.compressor.Close()
 	_ = o.file.Close()
 	o.compressor = nil
@@ -122,7 +74,7 @@ func newOutWriter(filename string, compressType int) (io.Writer, error) {
 	if err != nil {
 		return nil, err
 	}
-	compressor, err := getCompressWriter(compressType, file)
+	compressor, err := getCompressor(compressType, file)
 	if err != nil {
 		_ = file.Close()
 		return nil, err

@@ -1,11 +1,12 @@
 package main
 
 import (
-	"fmt"
+	"os"
+
 	"github.com/alecthomas/kong"
+
 	"github.com/skiloop/binfiles/binfile"
 	"github.com/skiloop/binfiles/binfile/filelock"
-	"os"
 )
 
 var cc struct {
@@ -18,24 +19,24 @@ func main() {
 	_ = kong.Parse(&cc)
 	binfile.Verbose = cc.Verbose
 	if cc.Src == "" {
-		fmt.Printf("bin file is required")
+		binfile.LogInfo("bin file is required")
 		return
 	}
 	w, err := os.OpenFile(cc.Src, os.O_CREATE|os.O_APPEND, 0644)
 	if err != nil {
-		fmt.Printf("open failed: %v\n", err)
+		binfile.LogInfo("open failed: %v\n", err)
 		return
 	}
 
 	err = filelock.Lock(*w)
 	if err != nil {
-		fmt.Printf("lock failed: %v\n", err)
+		binfile.LogInfo("lock failed: %v\n", err)
 		return
 	}
 	defer func(f os.File) {
 		err := filelock.UnLock(f)
 		if err != nil {
-			fmt.Printf("unlock failed: %v\n", err)
+			binfile.LogInfo("unlock failed: %v\n", err)
 		}
 	}(*w)
 
