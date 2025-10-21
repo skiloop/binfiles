@@ -14,35 +14,38 @@ import (
 )
 
 type ListCmd struct {
-	Input     string `arg:"" help:"input file name"`
-	Offset    int64  `arg:"" optional:"" help:"start document position" default:"0"`
 	KeyOnly   bool   `short:"k" help:"list key only" default:"false"`
-	Limit     int32  `short:"l" help:"limit of list number, 0 means unlimited" default:"0"`
 	SkipError bool   `help:"skip error docs and continue reading" default:"false"`
+	Limit     int32  `short:"l" help:"limit of list number, 0 means unlimited" default:"0"`
+	Offset    int64  `arg:"" optional:"" help:"start document position" default:"0"`
+	Input     string `arg:"" help:"input file name"`
 }
 
 type ReadCmd struct {
-	Input     string `arg:"" help:"input file name"`
+	SkipError bool   `help:"skip error docs and continue reading" default:"false"`
+	Limit     int32  `short:"l" help:"number of documents to read, 0 means read all" default:"1"`
 	Offset    int64  `arg:"" optional:"" help:"start position" default:"0"`
+	Input     string `arg:"" help:"input file name"`
 	Output    string `short:"o" help:"output file name, empty to std output" default:""`
 	OutType   string `short:"c" help:"output compression type, only works when output not empty" enum:"gzip,bz2,xz,br,brotli,lz4,none" default:"none"`
-	Limit     int32  `short:"l" help:"number of documents to read, 0 means read all" default:"1"`
-	SkipError bool   `help:"skip error docs and continue reading" default:"false"`
 }
 
 type CountCmd struct {
-	Input       string `arg:"" help:"input file name"`
-	Offset      int64  `arg:"" optional:"" help:"start position" default:"0"`
-	WorkerCount int    `short:"w" help:"number of workers, when 0 or negative number of system processors will be used" default:"0"`
+	KeyOnly     bool   `short:"k" help:"count without decode content" default:"false"`
 	SkipError   bool   `help:"skip error docs and continue reading" default:"false"`
+	WorkerCount int    `short:"w" help:"number of workers, when 0 or negative number of system processors will be used" default:"0"`
+	Offset      int64  `arg:"" optional:"" help:"start position" default:"0"`
+	Input       string `arg:"" help:"input file name"`
 }
 
 type SearchCmd struct {
-	Input       string `arg:"" help:"input file name"`
-	Key         string `arg:"" help:"key to search, regex supported"`
-	Pretty      bool   `short:"p" help:"value is a json, and pretty output when found" default:"false"`
-	Offset      int64  `arg:"" optional:"" help:"position to search from" default:"0"`
-	NoSkipError bool   `help:"continue searching when encounter invalid doc" default:"false"`
+	NoSkipError bool `help:"continue searching when encounter invalid doc" default:"false"`
+
+	Pretty bool  `short:"p" help:"value is a json, and pretty output when found" default:"false"`
+	Offset int64 `arg:"" optional:"" help:"position to search from" default:"0"`
+
+	Input string `arg:"" help:"input file name"`
+	Key   string `arg:"" help:"key to search, regex supported"`
 }
 
 type SeekCmd struct {
@@ -51,29 +54,29 @@ type SeekCmd struct {
 }
 
 type PackageCmd struct {
+	WorkerCount       int    `short:"w" help:"number of workers, when 0 or negative number of system processors will be used" default:"0"`
 	Output            string `arg:"" help:"output bin file path"`
 	Path              string `arg:"" help:"input path or tar file path"`
 	InputCompressType string `short:"c" help:"input file compression type" enum:"gzip,bz2,xz,br,brotli,lz4,none" default:"none"`
 	TarCompressType   string `short:"t" help:"tar file compression type" enum:"gzip,bz2,xz,br,brotli,lz4,none" default:"gzip"`
 	Pattern           string `short:"p" help:"source file pattern, the matched will be packaged, all files package if empty" default:""`
-	WorkerCount       int    `short:"w" help:"number of workers, when 0 or negative number of system processors will be used" default:"0"`
 }
 type VersionCmd struct {
 }
 
 type ListTarCmd struct {
+	Limit  int32  `short:"l" help:"limit of list number, 0 means unlimited" default:"0"`
 	Input  string `arg:"" help:"input file name"`
 	Format string `short:"f" help:"compression format" enum:"auto,gzip,xz,bzip2,zlib,none" default:"auto"`
-	Limit  int32  `short:"l" help:"limit of list number, 0 means unlimited" default:"0"`
 }
 
 var client struct {
-	CompressType string            `short:"z" help:"compression type, none if do not want to compress" enum:"gzip,xz,br,lz4,bz2,none" default:"gzip"`
 	Verbose      bool              `short:"v" help:"verbose" default:"false"`
 	Debug        bool              `short:"d" help:"debug" default:"false"`
-	LogLevel     string            `help:"log level" enum:"debug,info,warn,error,fatal" default:"info"`
 	KeySizeLimit int32             `short:"L" help:"max size of document key in bytes" default:"1000"`
 	Step         int32             `short:"s" help:"how many docs to skip before next doc is processed, for count command means verbose step" default:"0"`
+	LogLevel     string            `help:"log level" enum:"debug,info,warn,error,fatal" default:"info"`
+	CompressType string            `short:"z" help:"compression type, none if do not want to compress" enum:"gzip,xz,br,lz4,bz2,none" default:"gzip"`
 	Version      VersionCmd        `cmd:"" help:"print version" default:"withargs"`
 	List         ListCmd           `cmd:"" aliases:"l,ls" help:"List documents from position."`
 	Read         ReadCmd           `cmd:"" aliases:"r,ra" help:"Read documents from position"`
