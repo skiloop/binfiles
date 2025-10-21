@@ -59,6 +59,7 @@ func (o *outWriter) Close() error {
 		return nil
 	}
 	_ = o.compressor.Flush()
+	_ = o.compressor.Close()
 	_ = o.file.Close()
 	o.compressor = nil
 	o.file = nil
