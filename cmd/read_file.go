@@ -8,6 +8,8 @@ import (
 	"os"
 
 	"github.com/alecthomas/kong"
+
+	"github.com/skiloop/binfiles/binfile"
 )
 
 var cli struct {
@@ -18,21 +20,21 @@ func main() {
 	_ = kong.Parse(&cli)
 	w, err := os.OpenFile(cli.binFile, os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
-		LogInfo(err.Error())
+		binfile.LogInfo(err.Error())
 		return
 	}
 	var num int32
 	num = 4
 	err = binary.Write(w, binary.LittleEndian, num)
 	if err != nil {
-		LogInfo(err.Error())
+		binfile.LogInfo(err.Error())
 		return
 	}
 	_ = w.Close()
 
 	r, err := os.OpenFile(cli.binFile, os.O_RDONLY, 0644)
 	if err != nil {
-		LogInfo(err.Error())
+		binfile.LogInfo(err.Error())
 		return
 	}
 	var n int32
@@ -43,5 +45,5 @@ func main() {
 	_, _ = wt.Write(make([]byte, 64))
 	_ = wt.Flush()
 	_ = wt.Close()
-	LogInfo(base64.StdEncoding.EncodeToString(bw.Bytes()))
+	binfile.LogInfo(base64.StdEncoding.EncodeToString(bw.Bytes()))
 }

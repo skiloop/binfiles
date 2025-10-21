@@ -144,7 +144,7 @@ func readNode(reader io.Reader, node *Node) (nr int, err error) {
 	nr += n
 
 	if err == io.EOF && int32(n) < node.Size {
-		return nr, InvalidDocumentFound
+		return nr, ErrInvalidDocument
 	}
 
 	if err != nil && err != io.EOF {

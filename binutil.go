@@ -17,15 +17,15 @@ type ListCmd struct {
 	KeyOnly   bool   `short:"k" help:"list key only" default:"false"`
 	SkipError bool   `help:"skip error docs and continue reading" default:"false"`
 	Limit     int32  `short:"l" help:"limit of list number, 0 means unlimited" default:"0"`
-	Offset    int64  `arg:"" optional:"" help:"start document position" default:"0"`
 	Input     string `arg:"" help:"input file name"`
+	Offset    int64  `arg:"" optional:"" help:"start document position" default:"0"`
 }
 
 type ReadCmd struct {
 	SkipError bool   `help:"skip error docs and continue reading" default:"false"`
 	Limit     int32  `short:"l" help:"number of documents to read, 0 means read all" default:"1"`
-	Offset    int64  `arg:"" optional:"" help:"start position" default:"0"`
 	Input     string `arg:"" help:"input file name"`
+	Offset    int64  `arg:"" optional:"" help:"start position" default:"0"`
 	Output    string `short:"o" help:"output file name, empty to std output" default:""`
 	OutType   string `short:"c" help:"output compression type, only works when output not empty" enum:"gzip,bz2,xz,br,brotli,lz4,none" default:"none"`
 }
@@ -34,16 +34,17 @@ type CountCmd struct {
 	KeyOnly     bool   `short:"k" help:"count without decode content" default:"false"`
 	SkipError   bool   `help:"skip error docs and continue reading" default:"false"`
 	WorkerCount int    `short:"w" help:"number of workers, when 0 or negative number of system processors will be used" default:"0"`
-	Offset      int64  `arg:"" optional:"" help:"start position" default:"0"`
 	Input       string `arg:"" help:"input file name"`
+	Offset      int64  `arg:"" optional:"" help:"start position" default:"0"`
+	End         int64  `arg:"" optional:"" help:"end position" default:"-1"`
 }
 
 type SearchCmd struct {
 	NoSkipError bool   `help:"continue searching when encounter invalid doc" default:"false"`
 	Pretty      bool   `short:"p" help:"value is a json, and pretty output when found" default:"false"`
-	Offset      int64  `arg:"" optional:"" help:"position to search from" default:"0"`
 	Input       string `arg:"" help:"input file name"`
 	Key         string `arg:"" help:"key to search, regex supported"`
+	Offset      int64  `arg:"" optional:"" help:"position to search from" default:"0"`
 }
 
 type SeekCmd struct {
@@ -53,8 +54,8 @@ type SeekCmd struct {
 
 type PackageCmd struct {
 	WorkerCount       int    `short:"w" help:"number of workers, when 0 or negative number of system processors will be used" default:"0"`
-	Output            string `arg:"" help:"output bin file path"`
 	Path              string `arg:"" help:"input path or tar file path"`
+	Output            string `arg:"" help:"output bin file path"`
 	InputCompressType string `short:"c" help:"input file compression type" enum:"gzip,bz2,xz,br,brotli,lz4,none" default:"none"`
 	TarCompressType   string `short:"t" help:"tar file compression type" enum:"gzip,bz2,xz,br,brotli,lz4,none" default:"gzip"`
 	Pattern           string `short:"p" help:"source file pattern, the matched will be packaged, all files package if empty" default:""`
@@ -74,6 +75,7 @@ var client struct {
 	KeySizeLimit int32             `short:"L" help:"max size of document key in bytes" default:"1000"`
 	Step         int32             `short:"s" help:"how many docs to skip before next doc is processed, for count command means verbose step" default:"0"`
 	LogLevel     string            `help:"log level" enum:"debug,info,warn,error,fatal" default:"info"`
+	KeyPattern   string            `help:"key regex pattern for key searching" default:""`
 	CompressType string            `short:"z" help:"compression type, none if do not want to compress" enum:"gzip,xz,br,lz4,bz2,none" default:"gzip"`
 	Version      VersionCmd        `cmd:"" help:"print version" default:"withargs"`
 	List         ListCmd           `cmd:"" aliases:"l,ls" help:"List documents from position."`
@@ -111,10 +113,11 @@ func newWriter(filename string, compress string) binfile.BinWriter {
 
 func listDocs(br binfile.BinReader) {
 	opt := binfile.ReadOption{
-		Offset:    client.List.Offset,
-		Limit:     client.List.Limit,
-		Step:      client.Step,
-		SkipError: client.List.SkipError,
+		Offset:     client.List.Offset,
+		Limit:      client.List.Limit,
+		Step:       client.Step,
+		SkipError:  client.List.SkipError,
+		KeyPattern: client.KeyPattern,
 	}
 	br.List(&opt, client.List.KeyOnly)
 }
@@ -128,19 +131,30 @@ func readDocs(br binfile.BinReader) {
 		OutCompress: binfile.CompressTypes[client.Read.OutType],
 		Output:      client.Read.Output,
 		SkipError:   client.Read.SkipError,
+		KeyPattern:  client.KeyPattern,
 	}
 	br.ReadDocs(&opt)
 }
 
 func countDocs(br binfile.BinReader) {
-
+	if client.Count.End > 0 && client.Count.End < client.Count.Offset {
+		binfile.LogError("end position %d is less than start position %d\n", client.Count.End, client.Count.Offset)
+		return
+	}
 	var step uint32
 	if client.Step < 0 {
 		step = 0
 	} else {
 		step = uint32(client.Step)
 	}
-	count := br.Count(client.Count.Offset, client.Count.WorkerCount, step, client.Count.SkipError)
+	count := br.Count(&binfile.CountOption{
+		KeyOnly:     client.Count.KeyOnly,
+		Offset:      client.Count.Offset,
+		WorkerCount: client.Count.WorkerCount,
+		End:         client.Count.End,
+		VerboseStep: step,
+		SkipError:   client.Count.SkipError,
+	})
 	if count >= 0 {
 		fmt.Printf("%d\n", count)
 	}
@@ -191,11 +205,12 @@ func searchDocs(br binfile.BinReader) {
 
 func seekDoc(br binfile.BinReader) {
 	next, doc := br.Next(&binfile.SeekOption{
-		Offset:  client.Seek.Offset,
-		Pattern: "",
-		KeySize: int(binfile.KeySizeLimit),
-		DocSize: -1,
-		End:     -1,
+		Offset:     client.Seek.Offset,
+		Pattern:    client.KeyPattern,
+		KeySize:    int(binfile.KeySizeLimit),
+		DocSize:    -1,
+		End:        -1,
+		Decompress: true,
 	})
 	if next < 0 {
 		binfile.LogInfo("no document found")

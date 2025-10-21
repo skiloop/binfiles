@@ -52,7 +52,7 @@ func (r *docRepack) worker(no int) {
 		}
 		doc, err = reader.docSeeker.Read(true)
 		if err != nil {
-			pos, dc := reader.next(offset, end, -1, -1, nil)
+			pos, dc := reader.next(offset, end, -1, -1, nil, true)
 			if dc == nil {
 				LogInfo("[%d] no more doc after %d\n", no, offset)
 				break
