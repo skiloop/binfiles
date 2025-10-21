@@ -1,5 +1,5 @@
 version: "1.0"
-linter: go
+linter: jetbrains/qodana-go:latest
 
 profile:
   name: Default
