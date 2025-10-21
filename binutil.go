@@ -39,13 +39,11 @@ type CountCmd struct {
 }
 
 type SearchCmd struct {
-	NoSkipError bool `help:"continue searching when encounter invalid doc" default:"false"`
-
-	Pretty bool  `short:"p" help:"value is a json, and pretty output when found" default:"false"`
-	Offset int64 `arg:"" optional:"" help:"position to search from" default:"0"`
-
-	Input string `arg:"" help:"input file name"`
-	Key   string `arg:"" help:"key to search, regex supported"`
+	NoSkipError bool   `help:"continue searching when encounter invalid doc" default:"false"`
+	Pretty      bool   `short:"p" help:"value is a json, and pretty output when found" default:"false"`
+	Offset      int64  `arg:"" optional:"" help:"position to search from" default:"0"`
+	Input       string `arg:"" help:"input file name"`
+	Key         string `arg:"" help:"key to search, regex supported"`
 }
 
 type SeekCmd struct {
@@ -148,13 +146,13 @@ func countDocs(br binfile.BinReader) {
 	}
 }
 
-func JsonPrettify(content []byte) (error, *bytes.Buffer) {
+func JsonPrettify(content []byte) (*bytes.Buffer, error) {
 	var prettyJSON bytes.Buffer
 	err := json.Indent(&prettyJSON, content, "", "\t")
 	if err != nil {
-		return err, nil
+		return nil, err
 	}
-	return nil, &prettyJSON
+	return &prettyJSON, nil
 }
 
 func searchDocs(br binfile.BinReader) {
@@ -183,7 +181,7 @@ func searchDocs(br binfile.BinReader) {
 		fmt.Printf("%10d\t%s\n", pos, doc.Content)
 		return
 	}
-	err, buf := JsonPrettify([]byte(doc.Content))
+	buf, err := JsonPrettify([]byte(doc.Content))
 	if err != nil {
 		binfile.LogError("json prettify failed: %v\n", err)
 		return
