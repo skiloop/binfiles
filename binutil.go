@@ -173,13 +173,13 @@ func searchDocs(br binfile.BinReader) {
 	opt := binfile.SearchOption{
 		Key:       client.Search.Key,
 		Offset:    client.Search.Offset,
-		Number:    int(client.Step),
+		Skip:      int(client.Step),
 		SkipError: !client.Search.NoSkipError,
 	}
 	if binfile.Verbose {
 		binfile.LogInfo("Key   : %s\n", opt.Key)
 		binfile.LogInfo("Offset: %d\n", opt.Offset)
-		binfile.LogInfo("Number: %d\n", opt.Number)
+		binfile.LogInfo("Number: %d\n", opt.Skip)
 	}
 	pos := br.Search(opt)
 	if pos < 0 {

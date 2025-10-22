@@ -61,17 +61,17 @@ type ReadOption struct {
 	Step        int32  `help:"document read interval"`
 	OutCompress int    `help:"output compress mode, only works when output not empty"`
 	Output      string `help:"output filename"`
-	KeyPattern  string `help:"key regex pattern for key searching","default:""`
+	KeyPattern  string `help:"key pattern for key searching, regex supported, default: empty"`
 
 	Repack    bool `help:"repack"`
 	SkipError bool `help:"skip error"`
 }
 
 type SearchOption struct {
-	Key       string `json:"key to search"`
-	Number    int    `json:"skip the n of found docs. If less then n docs found then return last one"`
-	Offset    int64  `json:"start offset to search"`
-	SkipError bool   `json:"continue searching when encounter doc error"`
+	Key       string `help:"key to search"`
+	Skip      int    `help:"skip the first n docs found, if less then n docs found then return last one, 0 means no skip, negative means random skip"`
+	Offset    int64  `help:"start offset to search"`
+	SkipError bool   `help:"continue searching when encounter doc error"`
 }
 
 //
@@ -395,7 +395,7 @@ func (br *binReader) Search(opt SearchOption) int64 {
 	var docPos int64 = -1
 
 	var found int64 = -1
-	skip := opt.Number
+	skip := opt.Skip
 	if skip < 0 {
 		rnd := rand.New(rand.NewSource(time.Now().Unix()))
 		skip = rnd.Intn(100)
