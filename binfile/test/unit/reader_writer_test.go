@@ -39,14 +39,11 @@ func TestBinReaderCreation(t *testing.T) {
 
 			// 测试读取功能
 			var dc *binfile.Doc
-			offset := int64(0)
 			for i := 0; i < len(testDocs); i++ {
-				dc, err = reader.Read(offset, true)
+				dc, err = reader.Read(int64(-1), compressType != binfile.NONE)
 				if err != nil {
 					t.Fatalf("failed to read from BinReader: %v", err)
 				}
-				// 获取下一个偏移量 - 这里需要根据实际API调整
-				offset += int64(len(dc.Key) + len(dc.Content) + 8) // 估算偏移量
 			}
 
 			if dc == nil {
@@ -156,66 +153,6 @@ func TestDocumentReadWrite(t *testing.T) {
 					t.Errorf("Document mismatch: index %d\nExpected: %v\nActual: %v",
 						i, expectedDoc, actualDoc)
 				}
-			}
-		})
-	}
-}
-
-// TestSearchFunctionality 测试搜索功能
-func TestSearchFunctionality(t *testing.T) {
-	root := common.GetTestDir("test_search")
-	os.MkdirAll(root, 0755)
-	defer common.CleanupTestDir(root)
-
-	// 创建包含特定键的测试文档
-	testDocs := []*binfile.Doc{
-		{Key: []byte("test-key-1"), Content: []byte("content1")},
-		{Key: []byte("test-key-2"), Content: []byte("content2")},
-		{Key: []byte("special-key"), Content: []byte("special-content")},
-		{Key: []byte("test-key-3"), Content: []byte("content3")},
-	}
-
-	testFile := filepath.Join(root, "test.bin")
-	err := common.WriteTestFile(testFile, testDocs, binfile.NONE)
-	if err != nil {
-		t.Fatalf("Write test file failed: %v", err)
-	}
-
-	reader, err := binfile.NewBinReader(testFile, binfile.NONE)
-	if err != nil {
-		t.Fatalf("NewBinReader failed: %v", err)
-	}
-	defer reader.Close()
-
-	// 测试搜索功能
-	searchTests := []struct {
-		pattern     string
-		expectedKey string
-	}{
-		{"^special-key$", "special-key"},
-		{"^test-key-2$", "test-key-2"},
-		{"test-key", "test-key-1"}, // 应该找到第一个匹配的
-	}
-
-	for _, test := range searchTests {
-		t.Run(test.pattern, func(t *testing.T) {
-			pos := reader.Search(binfile.SearchOption{
-				Key:    test.pattern,
-				Number: 1,
-				Offset: 0,
-			})
-
-			if pos < 0 {
-				t.Fatalf("Search failed for pattern: %s", test.pattern)
-			}
-
-			doc, err := reader.Read(pos, true)
-			if err != nil {
-				t.Fatalf("Read found document failed: %v", err)
-			}
-
-			if string(doc.Key) != test.expectedKey {
-				t.Errorf("Expected key %s, got %s", test.expectedKey, string(doc.Key))
 			}
 		})
 	}

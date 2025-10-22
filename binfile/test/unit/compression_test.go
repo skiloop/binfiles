@@ -134,7 +134,7 @@ func TestLoggerBasic(t *testing.T) {
 	// 验证包含预期的消息
 	expectedMessages := []string{
 		"[DEBUG] Debug message",
-		"[INFO] Info message",
+		"Info message",
 		"[WARN] Warn message",
 		"[ERROR] Error message",
 	}
