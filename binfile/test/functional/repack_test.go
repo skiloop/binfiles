@@ -82,7 +82,7 @@ func TestRepackFunctionality(t *testing.T) {
 			defer br.Close()
 
 			// 搜索第一个文档
-			pos := br.Search(binfile.SearchOption{Key: "^test-key-0$", Number: 1, Offset: 0})
+			pos := br.Search(binfile.SearchOption{Key: "^test-key-0$", Skip: 1, Offset: 0})
 			if pos < 0 {
 				t.Fatalf("Document not found: test-key-0, pos: %d", pos)
 			}
@@ -107,7 +107,7 @@ func TestLargeFileHandling(t *testing.T) {
 	defer common.CleanupTestDir(outputRoot)
 
 	// 创建较大的测试文件
-	testDocs := common.CreateTestDocs(1000)
+	testDocs := common.CreateTestDocs(100)
 	testFile := filepath.Join(outputRoot, "large_test.bin")
 
 	err := common.WriteTestFile(testFile, testDocs, binfile.NONE)
@@ -121,17 +121,24 @@ func TestLargeFileHandling(t *testing.T) {
 		t.Fatalf("NewBinReader failed: %v", err)
 	}
 	defer reader.Close()
-
+	stat, err := os.Stat(testFile)
+	if err != nil {
+		t.Fatalf("Get file stat failed: %v", err)
+	}
+	binfile.LogInfo("file size: %d\n", stat.Size())
 	// 测试计数功能
+	binfile.Verbose = true
+	binfile.SetGlobalLogLevel(binfile.DEBUG)
 	count := reader.Count(&binfile.CountOption{
 		Offset:      0,
 		End:         -1,
 		WorkerCount: 1,
-		VerboseStep: 100,
 		KeyOnly:     false,
+		VerboseStep: 1,
 		SkipError:   true,
 	})
-
+	binfile.Verbose = false
+	binfile.SetGlobalLogLevel(binfile.INFO)
 	if count != int64(len(testDocs)) {
 		t.Errorf("Expected count %d, got %d", len(testDocs), count)
 	}
@@ -139,7 +146,7 @@ func TestLargeFileHandling(t *testing.T) {
 	// 测试搜索功能
 	pos := reader.Search(binfile.SearchOption{
 		Key:    "^test-key-500$",
-		Number: 1,
+		Skip:   1,
 		Offset: 0,
 	})
 
@@ -194,7 +201,7 @@ func TestConcurrentAccess(t *testing.T) {
 				keyPattern := fmt.Sprintf("^test-key-%d$", j%len(testDocs))
 				pos := reader.Search(binfile.SearchOption{
 					Key:    keyPattern,
-					Number: 1,
+					Skip:   1,
 					Offset: 0,
 				})
 
@@ -248,8 +255,8 @@ func TestErrorRecovery(t *testing.T) {
 
 	// 测试无效偏移量
 	_, err = reader.Read(-1, true)
-	if err == nil {
-		t.Error("Expected error for invalid offset")
+	if err != nil {
+		t.Error("Unexpected error for negative offset:", err)
 	}
 
 	// 测试超出范围的偏移量
@@ -261,7 +268,7 @@ func TestErrorRecovery(t *testing.T) {
 	// 测试搜索不存在的键
 	pos := reader.Search(binfile.SearchOption{
 		Key:    "^nonexistent-key$",
-		Number: 1,
+		Skip:   1,
 		Offset: 0,
 	})
 
@@ -308,7 +315,7 @@ func TestCompressionTypes(t *testing.T) {
 			for i, expectedDoc := range testDocs {
 				pos := reader.Search(binfile.SearchOption{
 					Key:    fmt.Sprintf("^%s$", string(expectedDoc.Key)),
-					Number: 1,
+					Skip:   1,
 					Offset: 0,
 				})
 

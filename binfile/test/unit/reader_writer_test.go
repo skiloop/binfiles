@@ -136,7 +136,7 @@ func TestDocumentReadWrite(t *testing.T) {
 			for i, expectedDoc := range testDocs {
 				pos := reader.Search(binfile.SearchOption{
 					Key:    fmt.Sprintf("^%s$", string(expectedDoc.Key)),
-					Number: 1,
+					Skip:   1,
 					Offset: 0,
 				})
 

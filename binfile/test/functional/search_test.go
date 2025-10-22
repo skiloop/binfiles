@@ -49,7 +49,7 @@ func TestSearchFunctionality(t *testing.T) {
 		t.Run(test.pattern, func(t *testing.T) {
 			pos := reader.Search(binfile.SearchOption{
 				Key:    test.pattern,
-				Number: 1,
+				Skip:   0,
 				Offset: 0,
 			})
 
