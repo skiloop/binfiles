@@ -258,7 +258,8 @@ func (br *binReader) simpleCount(start, end int64, no int, verboseStep uint32, k
 	if doc == nil {
 		return count
 	}
-	var nextVerbose = uint32(1)
+	var nextVerbose = verboseStep
+
 	if Verbose {
 		if end != -1 {
 			LogInfo("[%d] count how many documents from position %d to %d\n", no, start, end)
@@ -268,25 +269,18 @@ func (br *binReader) simpleCount(start, end int64, no int, verboseStep uint32, k
 		LogInfo("[%d] start doc position: %d\n", no, curPos)
 	}
 	var err error
-	count += 1
+	count++
 	for {
-		curPos, _ = br.current()
-		err = br.skipNext()
-		if err == io.EOF {
+		// get current position
+		curPos, err = br.current()
+		if err == io.EOF || end >= 0 && curPos >= end {
+			LogDebug("[%d] reached end or EOF at %d\n", no, curPos)
 			break
 		}
 		if err != nil {
-			if !skipError {
-				break
-			}
-			pos, dc := br.next(curPos, -1, -1, -1, nil, keyOnly)
-			if dc == nil {
-				break
-			}
-			_ = br.resetOffset(pos)
-			continue
+			LogDebug("[%d] get current position error: %v\n", no, err)
+			break
 		}
-		count++
 		if Verbose && uint32(count) == nextVerbose {
 			LogInfo("[%d] got %10d documents from %20d to position %20d\n", no, count, start, curPos)
 			if verboseStep == 0 {
@@ -295,13 +289,23 @@ func (br *binReader) simpleCount(start, end int64, no int, verboseStep uint32, k
 				nextVerbose = nextVerbose + verboseStep
 			}
 		}
-		curPos, err = br.current()
-		if err == io.EOF || end >= 0 && curPos >= end {
+		// skip next doc
+		err = br.skipNext()
+		if err == io.EOF {
+			LogDebug("[%d] no more doc after %d\n", no, curPos)
 			break
 		}
 		if err != nil {
-			break
+			if !skipError {
+				break
+			}
+			LogDebug("[%d] doc read error at %d, seek for next doc\n", no, curPos)
+			_, dc := br.next(curPos, -1, -1, -1, nil, keyOnly)
+			if dc == nil {
+				break
+			}
 		}
+		count++
 	}
 	if err != nil && err != io.EOF {
 		LogError("\n[%d] read doc error at %d\n%v", no, curPos, err)
@@ -433,34 +437,35 @@ func (br *binReader) Search(opt SearchOption) int64 {
 func (br *binReader) skipNext() (err error) {
 
 	var offset int64
-	offset, err = br.docSeeker.Seek(0, io.SeekCurrent)
+	startOffset := int64(-1)
+	startOffset, err = br.docSeeker.Seek(0, io.SeekCurrent)
 	if err != nil {
 		return err
 	}
+	offset = startOffset
 	defer func() {
-		if err != nil {
-			_, _ = br.docSeeker.Seek(offset, io.SeekStart)
+		if err != nil && startOffset >= 0 {
+			_, _ = br.docSeeker.Seek(startOffset, io.SeekStart)
 		}
 	}()
 	// read key size
 	dk := &DocKey{}
 	var n int
 	n, err = br.docSeeker.ReadKey(dk)
-	offset += int64(n)
-	if err != nil {
-		return err
+	if err == nil {
+		offset += int64(n)
 	}
 	return err
 }
 
-// next seek next valid doc, return position and document
+// next seek next valid doc, return doc position and doc
 func (br *binReader) next(start, end int64, keySize, docSize int, regex *regexp.Regexp, decompress bool) (pos int64, doc *Doc) {
 
 	pos = start
 	if keySize <= 0 {
 		keySize = int(KeySizeLimit)
 	}
-	err := br.resetOffset(pos)
+	err := br.resetOffset(start)
 	if err == io.EOF {
 		return -1, nil
 	}
@@ -476,6 +481,8 @@ func (br *binReader) next(start, end int64, keySize, docSize int, regex *regexp.
 		return 0, nil
 	}
 	var docKey *DocKey
+	// number of bytes read from pos
+	nBytes := int64(len(buff))
 	for {
 		docKey, err = br.checkKey(buff, regex, keySize, docSize)
 		if err != nil {
@@ -486,14 +493,23 @@ func (br *binReader) next(start, end int64, keySize, docSize int, regex *regexp.
 			if doc != nil {
 				break
 			}
-			// skip to doc value
-			_, _ = br.file.Seek(pos+int64(len(buff)), io.SeekStart)
+			// why not pos + 1?
+			// because key is match, doc is invalid, these bytes won't be part of next valid doc
+			// skip to pos + 4 + keySize
+			nBytes += int64(4 + int32(docKey.KeySize))
+			_, _ = br.file.Seek(pos+nBytes, io.SeekStart)
+			_, err = br.file.Read(buff)
+			if err != nil {
+				break
+			}
+		} else {
+			buff, err = br.readByte(buff)
+			if err != nil {
+				break
+			}
+			nBytes += 1
 		}
-		buff, err = br.readByte(buff)
-		if err != nil {
-			break
-		}
-		pos += 1
+
 		if Debug {
 			nBytes := pos - start
 			if nBytes < 1024 {
