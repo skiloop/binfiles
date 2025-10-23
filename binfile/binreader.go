@@ -221,9 +221,7 @@ func (br *binReader) Count(opt *CountOption) int64 {
 	total := int64(0)
 	for no := 0; no < opt.WorkerCount; no++ {
 		cnt := <-countCh
-		if cnt < 0 {
-			total = -1
-		} else {
+		if cnt > 0 {
 			total += cnt
 		}
 	}
@@ -234,6 +232,8 @@ func (br *binReader) Count(opt *CountOption) int64 {
 func (br *binReader) conCount(ch chan int64, start, end int64, no int, verboseStep uint32,
 	keyOnly bool, skipError bool, pattern string) {
 	// TODO: fix concurrent count error: count mismatch
+	LogDebug("[%d] count documents from %d to %d\n", no, start, end)
+	defer LogDebug("[%d] worker done\n", no)
 	brd, err := NewBinReader(br.filename, br.docSeeker.CompressType())
 	if err != nil {
 		ch <- 0
@@ -248,21 +248,41 @@ func (br *binReader) conCount(ch chan int64, start, end int64, no int, verboseSt
 	ch <- dr.simpleCount(start, end, no, verboseStep, keyOnly, skipError, pattern)
 }
 
+// simpleCount count documents from start to end
+// end: negative means count to end of file
+// return count of documents
+// return -1 if error
 func (br *binReader) simpleCount(start, end int64, no int, verboseStep uint32, keyOnly bool,
 	skipError bool, pattern string) (count int64) {
+	var err error
+	LogDebug("[%d] simple count documents from %d to %d\n", no, start, end)
+	if end < 0 {
+		end, err = br.docSeeker.Seek(0, io.SeekEnd)
+		if err != nil {
+			LogError("[%d] get end position error: %v\n", no, err)
+			return -1
+		}
+	}
 	count = 0
 	curPos, doc := br.Next(&SeekOption{
 		Offset:     start,
 		Pattern:    pattern,
 		KeySize:    int(KeySizeLimit),
-		DocSize:    MaxDocSize,
+		DocSize:    -1,
 		End:        end,
 		Decompress: !keyOnly,
 	})
+	LogDebug("[%d] first doc position: %d\n", no, curPos)
 	if doc == nil {
 		return count
 	}
 	var nextVerbose = verboseStep
+	var regex *regexp.Regexp
+	if pattern != "" {
+		regex, _ = regexp.Compile(pattern)
+	} else {
+		regex = nil
+	}
 
 	if Verbose {
 		if end != -1 {
@@ -272,13 +292,13 @@ func (br *binReader) simpleCount(start, end int64, no int, verboseStep uint32, k
 		}
 		LogInfo("[%d] start doc position: %d\n", no, curPos)
 	}
-	var err error
 	count++
 	for {
 		// get current position
 		curPos, err = br.current()
-		if err == io.EOF || end >= 0 && curPos >= end {
+		if err == io.EOF || curPos >= end {
 			LogDebug("[%d] reached end or EOF at %d\n", no, curPos)
+			err = nil
 			break
 		}
 		if err != nil {
@@ -294,16 +314,19 @@ func (br *binReader) simpleCount(start, end int64, no int, verboseStep uint32, k
 			}
 		}
 		// skip next doc
-		err = br.skipNext()
+		err = br.skipNextWithLimit(KeySizeLimit, MaxDocSize, regex)
 		if err == io.EOF {
 			LogDebug("[%d] no more doc after %d\n", no, curPos)
+			err = nil
 			break
 		}
 		if err != nil {
+			LogDebug("[%d] skip next error, pos: %d, error: %v\n", no, curPos, err)
 			if !skipError {
 				break
 			}
 			LogDebug("[%d] doc read error at %d, seek for next doc\n", no, curPos)
+			curPos += 1
 			_, dc := br.next(curPos, -1, -1, -1, nil, keyOnly)
 			if dc == nil {
 				break
@@ -311,9 +334,8 @@ func (br *binReader) simpleCount(start, end int64, no int, verboseStep uint32, k
 		}
 		count++
 	}
-	if err != nil && err != io.EOF {
-		LogError("\n[%d] read doc error at %d, %v\n", no, curPos, err)
-		return -1
+	if curPos < end {
+		LogError("[%d] not all documents are counted, count: %d, curPos: %d, end: %d\n", no, count, curPos, end)
 	}
 	if Verbose {
 		LogInfo("[%d] got %10d documents from %20d to position %20d\n", no, count, start, curPos)
@@ -437,8 +459,15 @@ func (br *binReader) Search(opt SearchOption) int64 {
 	return found
 }
 
-// skipNext skip next doc, include invalid doc
+// skipNext skip next valid doc
+// return error end of file or invalid doc
 func (br *binReader) skipNext() (err error) {
+	return br.skipNextWithLimit(KeySizeLimit, MaxDocSize, nil)
+}
+
+// skipNext skip next valid doc
+// return error end of file or invalid doc
+func (br *binReader) skipNextWithLimit(maxKeySize int32, maxContentSize int32, regex *regexp.Regexp) (err error) {
 
 	var offset int64
 	startOffset := int64(-1)
@@ -447,33 +476,46 @@ func (br *binReader) skipNext() (err error) {
 		return err
 	}
 	offset = startOffset
-	defer func() {
-		if err != nil && startOffset >= 0 {
-			_, _ = br.docSeeker.Seek(startOffset, io.SeekStart)
-		}
-	}()
+
 	// read key size
 	dk := &DocKey{}
 	var n int
 	n, err = br.docSeeker.ReadKey(dk)
 	if err == nil {
-		offset += int64(n)
+		if (maxKeySize > 0 && dk.KeySize > maxKeySize) || (maxContentSize > 0 && dk.ContentSize > maxContentSize) ||
+			(regex != nil && !regex.MatchString(string(dk.Key))) {
+			err = ErrInvalidDocument
+		} else {
+			offset += int64(n)
+		}
 	}
+	if err != io.EOF && err != nil {
+		// reset to start offset if error
+		_, _ = br.docSeeker.Seek(startOffset, io.SeekStart)
+	}
+	//if Verbose && err == nil {
+	//	LogDebug("skip next doc: start pos: %d, key size: %d, key: %s, content size: %d\n",
+	//		startOffset, dk.KeySize, string(dk.Key), dk.ContentSize)
+	//}
 	return err
 }
 
-// next seek next valid doc, return doc position and doc
-func (br *binReader) next(start, end int64, keySize, docSize int, regex *regexp.Regexp, decompress bool) (pos int64, doc *Doc) {
-
-	pos = start
-	if keySize <= 0 {
-		keySize = int(KeySizeLimit)
+// next seek the first valid doc after start position (start included)
+// return doc position and doc
+// return -1 and nil if end of file or error
+func (br *binReader) next(start, end int64, maxKeySize, maxDocSize int, regex *regexp.Regexp,
+	decompress bool) (docPos int64, doc *Doc) {
+	originalPos, _ := br.current()
+	LogDebug("next: start: %d, end: %d, maxKeySize: %d, maxDocSize: %d, regex: %v, decompress: %v\n", start, end, maxKeySize, maxDocSize, regex, decompress)
+	docPos = start
+	if maxKeySize <= 0 {
+		maxKeySize = int(KeySizeLimit)
 	}
 	err := br.resetOffset(start)
 	if err == io.EOF {
 		return -1, nil
 	}
-	buff := make([]byte, int(unsafe.Sizeof(int32(0)))*2+int(KeySizeLimit))
+	buff := make([]byte, int(unsafe.Sizeof(int32(0)))*2+int(maxKeySize))
 
 	_, err = br.file.Read(buff)
 	if err != nil {
@@ -486,22 +528,24 @@ func (br *binReader) next(start, end int64, keySize, docSize int, regex *regexp.
 	}
 	var docKey *DocKey
 	// number of bytes read from pos
-	nBytes := int64(len(buff))
+	var nBytes int64 = 0
+	searchedSize := int64(0)
+	nextVerbose := int64(1024)
 	for {
-		docKey, err = br.checkKey(buff, regex, keySize, docSize)
+		docKey, err = br.checkKey(buff, regex, maxKeySize, maxDocSize)
 		if err != nil {
 			break
 		}
 		if docKey != nil {
-			doc, err = br.docSeeker.ReadAt(pos, decompress)
+			doc, err = br.docSeeker.ReadAt(docPos, decompress)
 			if doc != nil {
 				break
 			}
 			// why not pos + 1?
 			// because key is match, doc is invalid, these bytes won't be part of next valid doc
 			// skip to pos + 4 + keySize
-			nBytes += int64(4 + int32(docKey.KeySize))
-			_, _ = br.file.Seek(pos+nBytes, io.SeekStart)
+			nBytes = int64(4 + int32(docKey.KeySize))
+			_, _ = br.file.Seek(docPos+nBytes, io.SeekStart)
 			_, err = br.file.Read(buff)
 			if err != nil {
 				break
@@ -511,26 +555,27 @@ func (br *binReader) next(start, end int64, keySize, docSize int, regex *regexp.
 			if err != nil {
 				break
 			}
-			nBytes += 1
 		}
+		searchedSize = docPos - start
 
-		if Verbose {
-			nBytes := pos - start
-			if nBytes < 1024 {
-				LogInfo("%10d\t%10d bytes search\n", pos, nBytes)
-			} else {
-				LogInfo("%10d\t%10dk search\n", pos, nBytes/1024)
-			}
+		if Verbose && searchedSize >= nextVerbose {
+			searchSizeStr := GetHumanReadableSize(searchedSize)
+			LogInfo("%10d\t%10s is searched\n", docPos, searchSizeStr)
+			nextVerbose += nextVerbose / 2
 		}
-		if end > 0 && pos > end {
+		// next position to check
+		docPos += nBytes
+		if end > 0 && docPos > end {
 			break
 		}
+		nBytes = 0
 	}
 	if err != nil {
+		_ = br.resetOffset(originalPos)
 		LogError("seek next error: %v\n", err)
 		return -1, nil
 	}
-	return pos, doc
+	return docPos, doc
 }
 
 // Next document position
@@ -548,12 +593,12 @@ func (br *binReader) Next(opt *SeekOption) (pos int64, doc *Doc) {
 }
 
 func (br *binReader) checkKey(buff []byte, pattern *regexp.Regexp,
-	keyLimit, contentLimit int) (*DocKey, error) {
+	maxKeySize, maxContentSize int) (*DocKey, error) {
 	var size int32
 	r := bytes.NewBuffer(buff)
 	_, _ = readInt32(r, &size)
 	ks := size + 4
-	if size <= 0 || size > int32(len(buff)-8) || keyLimit > 0 && int32(keyLimit) < size ||
+	if size <= 0 || size > int32(len(buff)-8) || maxKeySize > 0 && int32(maxKeySize) < size ||
 		pattern != nil && !pattern.MatchString(string(buff[4:ks])) {
 		return nil, nil
 	}
@@ -566,7 +611,7 @@ func (br *binReader) checkKey(buff []byte, pattern *regexp.Regexp,
 	if ks < int32(len(buff)) {
 		r = bytes.NewBuffer(buff[ks:])
 		_, _ = readInt32(r, &size)
-		if size < 0 || contentLimit > 0 && int32(contentLimit) < size {
+		if size < 0 || maxContentSize > 0 && int32(maxContentSize) < size {
 			return nil, nil
 		}
 		doc.ContentSize = size
@@ -578,7 +623,7 @@ func (br *binReader) checkKey(buff []byte, pattern *regexp.Regexp,
 		return nil, err
 	}
 	_, _ = readInt32(r, &size)
-	if contentLimit > 0 && int32(contentLimit) < size {
+	if maxContentSize > 0 && int32(maxContentSize) < size {
 		_, _ = br.file.Seek(-4, io.SeekCurrent)
 		return nil, nil
 	}

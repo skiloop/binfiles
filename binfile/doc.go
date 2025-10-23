@@ -12,7 +12,7 @@ var (
 	//ErrCompressWriter   = errors.New("fail to get compress writer")
 	ErrValueDecompress = errors.New("value decompress error")
 	ErrInvalidKey      = errors.New("invalid key")
-	ErrReadKey         = errors.New("key read error")
+	ErrReadNode        = errors.New("node read error")
 	ErrReadDoc         = errors.New("doc read error")
 	ErrFileExists      = errors.New("file already exists")
 	//ErrNotSupport      = errors.New("not support for this compression type")
@@ -36,7 +36,7 @@ type Node struct {
 
 func ReadDoc(r io.Reader, doc *Doc) (int, error) {
 	dc := &DocKey{}
-	nr, err := readHeader(r, dc)
+	nr, err := readHeader(r, dc, KeySizeLimit)
 	if err != nil {
 		return nr, err
 	}
@@ -125,18 +125,18 @@ func writeNode(w io.Writer, data []byte) (n int, err error) {
 	return n + int(keySize), err
 }
 
-func readNode(reader io.Reader, node *Node) (nr int, err error) {
+func readNode(reader io.Reader, node *Node, sizeLimit int32) (nr int, err error) {
 	nr, err = readInt32(reader, &node.Size)
 	if err == io.EOF {
 		return nr, err
 	}
 	if err != nil {
 		LogError("read int error: %v\n", err)
-		return nr, ErrReadKey
+		return nr, ErrReadNode
 	}
-	if node.Size < 0 || node.Size > MaxDocSize || node.Size > KeySizeLimit {
+	if node.Size < 0 || node.Size > sizeLimit {
 		// LogError("read node size error: %d\n", node.Size)
-		return nr, ErrReadKey
+		return nr, ErrReadNode
 	}
 	node.Data = make([]byte, node.Size)
 	var n int
@@ -144,23 +144,20 @@ func readNode(reader io.Reader, node *Node) (nr int, err error) {
 	nr += n
 
 	if err == io.EOF && int32(n) < node.Size {
-		return nr, ErrInvalidDocument
+		return nr, ErrReadNode
 	}
 
 	if err != nil && err != io.EOF {
 		LogError("read node data error: %v\n", err)
-		return nr, ErrReadDoc
+		return nr, ErrReadNode
 	}
 	return nr, nil
 }
 
-func readHeader(reader io.Reader, doc *DocKey) (int, error) {
+func readHeader(reader io.Reader, doc *DocKey, sizeLimit int32) (int, error) {
 	node := &Node{}
-	nr, err := readNode(reader, node)
+	nr, err := readNode(reader, node, sizeLimit)
 	if err != nil {
-		return nr, err
-	}
-	if int32(len(string(doc.Key))) > KeySizeLimit {
 		return nr, ErrInvalidKey
 	}
 	n, err := readInt32(reader, &doc.ContentSize)

@@ -2,6 +2,7 @@ package binfile
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"math/rand"
 	"os"
@@ -53,4 +54,19 @@ func GenerateRandomString(n int) string {
 		b[i] = letterBytes[r.Intn(len(letterBytes))]
 	}
 	return string(b)
+}
+
+func GetHumanReadableSize(size int64) string {
+	switch {
+	case size < 1024:
+		return fmt.Sprintf("%d B", size)
+	case size < 1024*1024:
+		return fmt.Sprintf("%d KB", size/1024)
+	case size < 1024*1024*1024:
+		return fmt.Sprintf("%d MB", size/(1024*1024))
+	case size < 1024*1024*1024*1024:
+		return fmt.Sprintf("%d GB", size/(1024*1024*1024))
+	default:
+		return fmt.Sprintf("%d TB", size/(1024*1024*1024*1024))
+	}
 }

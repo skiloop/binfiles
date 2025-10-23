@@ -279,7 +279,7 @@ func main() {
 		execReadCmd(client.List.Input, listDocs)
 	case "read <input>", "read <input> <offset>":
 		execReadCmd(client.Read.Input, readDocs)
-	case "count <input>", "count <input> <offset>":
+	case "count <input>", "count <input> <offset>", "count <input> <offset> <end>":
 		execReadCmd(client.Count.Input, countDocs)
 	case "seek <input>", "seek <input> <offset>":
 		execReadCmd(client.Seek.Input, seekDoc)
