@@ -29,6 +29,7 @@ type CountOption struct {
 	WorkerCount int
 	VerboseStep uint32
 	Input       string
+	Pattern     string
 	KeyOnly     bool
 	SkipError   bool
 }
@@ -197,7 +198,7 @@ func (br *binReader) skipDocs(count int32) (err error) {
 func (br *binReader) Count(opt *CountOption) int64 {
 
 	if opt.WorkerCount <= 1 {
-		return br.simpleCount(opt.Offset, opt.End, 0, opt.VerboseStep, opt.KeyOnly, opt.SkipError)
+		return br.simpleCount(opt.Offset, opt.End, 0, opt.VerboseStep, opt.KeyOnly, opt.SkipError, opt.Pattern)
 	}
 	remainSize, err := br.docSeeker.Seek(opt.Offset, io.SeekEnd)
 	if err != nil {
@@ -210,7 +211,8 @@ func (br *binReader) Count(opt *CountOption) int64 {
 	countCh := make(chan int64, opt.WorkerCount)
 	start := opt.Offset
 	for no := 0; no < opt.WorkerCount; no++ {
-		go br.conCount(countCh, start, start+workerReadSize, no, opt.VerboseStep, opt.KeyOnly, opt.SkipError)
+		go br.conCount(countCh, start, start+workerReadSize, no, opt.VerboseStep,
+			opt.KeyOnly, opt.SkipError, opt.Pattern)
 		start += workerReadSize
 		if start-opt.Offset > remainSize {
 			break
@@ -229,7 +231,8 @@ func (br *binReader) Count(opt *CountOption) int64 {
 }
 
 // count concurrently
-func (br *binReader) conCount(ch chan int64, start, end int64, no int, verboseStep uint32, keyOnly bool, skipError bool) {
+func (br *binReader) conCount(ch chan int64, start, end int64, no int, verboseStep uint32,
+	keyOnly bool, skipError bool, pattern string) {
 	// TODO: fix concurrent count error: count mismatch
 	brd, err := NewBinReader(br.filename, br.docSeeker.CompressType())
 	if err != nil {
@@ -242,14 +245,15 @@ func (br *binReader) conCount(ch chan int64, start, end int64, no int, verboseSt
 		ch <- 0
 		return
 	}
-	ch <- dr.simpleCount(start, end, no, verboseStep, keyOnly, skipError)
+	ch <- dr.simpleCount(start, end, no, verboseStep, keyOnly, skipError, pattern)
 }
 
-func (br *binReader) simpleCount(start, end int64, no int, verboseStep uint32, keyOnly bool, skipError bool) (count int64) {
+func (br *binReader) simpleCount(start, end int64, no int, verboseStep uint32, keyOnly bool,
+	skipError bool, pattern string) (count int64) {
 	count = 0
 	curPos, doc := br.Next(&SeekOption{
 		Offset:     start,
-		Pattern:    "",
+		Pattern:    pattern,
 		KeySize:    int(KeySizeLimit),
 		DocSize:    MaxDocSize,
 		End:        end,

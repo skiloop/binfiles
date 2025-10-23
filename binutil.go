@@ -152,6 +152,7 @@ func countDocs(br binfile.BinReader) {
 		Offset:      client.Count.Offset,
 		WorkerCount: client.Count.WorkerCount,
 		End:         client.Count.End,
+		Pattern:     client.KeyPattern,
 		VerboseStep: step,
 		SkipError:   client.Count.SkipError,
 	})
