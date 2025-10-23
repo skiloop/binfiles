@@ -116,7 +116,7 @@ func (br *binReader) ReadDocs(opt *ReadOption) {
 	var doc *Doc
 	w, err := newOutWriter(opt.Output, opt.OutCompress)
 	if err != nil {
-		errorf("%v", err)
+		LogError("create output writer error: %v\n", err)
 		return
 	}
 	defer closeWriter(w, "close output")
@@ -304,7 +304,7 @@ func (br *binReader) simpleCount(start, end int64, no int, verboseStep uint32, k
 		}
 	}
 	if err != nil && err != io.EOF {
-		LogError("\n[%d] read doc error at %d\n%v", no, curPos, err)
+		LogError("\n[%d] read doc error at %d, %v\n", no, curPos, err)
 		return -1
 	}
 	if Verbose {
@@ -494,7 +494,7 @@ func (br *binReader) next(start, end int64, keySize, docSize int, regex *regexp.
 			break
 		}
 		pos += 1
-		if Debug {
+		if Verbose {
 			nBytes := pos - start
 			if nBytes < 1024 {
 				LogInfo("%10d\t%10d bytes search\n", pos, nBytes)

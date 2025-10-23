@@ -114,9 +114,9 @@ func packageDirectory(option *PackageOption, bw BinWriter, ch, stop chan any, pa
 }
 
 func searchFiles(root string, ch, stop chan any, compress int, pattern *regexp.Regexp) {
-	if Debug {
-		LogInfo("searching files in %s\n", root)
-	}
+
+	LogInfo("searching files in %s\n", root)
+
 	defer func() {
 		ch <- nil
 	}()
@@ -128,15 +128,13 @@ func searchFiles(root string, ch, stop chan any, compress int, pattern *regexp.R
 		if err != nil || d.IsDir() && path != root {
 			// root will not be dir if err is not nil
 			// stopCh processing dir if read dir error
-			debug("skip processing dir %s: %v\n", path, err)
+			LogDebug("skip processing dir %s: %v\n", path, err)
 			return fs.SkipDir
 		}
 		// process only regular files (d is not nil if err is nil)
 		// filter out files those not match the pattern
 		if path == "" || !fs.FileMode.IsRegular(d.Type()) || pattern != nil && !pattern.MatchString(path) {
-			if Debug {
-				LogInfo("%s skipped\n", path)
-			}
+			LogInfo("%s skipped\n", path)
 			return nil
 		}
 		// files are queue to processed

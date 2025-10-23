@@ -82,7 +82,7 @@ func (p *pathRepack) pack(filename string) (err error) {
 			continue
 		}
 		if _, err = bw.Write(doc); err != nil {
-			debug("write doc %s error: %v\n", doc.Key, err)
+			LogDebug("write doc %s error: %v\n", doc.Key, err)
 			skip += 1
 			continue
 		}

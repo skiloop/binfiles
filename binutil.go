@@ -71,7 +71,6 @@ type ListTarCmd struct {
 
 var client struct {
 	Verbose      bool              `short:"v" help:"verbose" default:"false"`
-	Debug        bool              `short:"d" help:"debug" default:"false"`
 	KeySizeLimit int32             `short:"L" help:"max size of document key in bytes" default:"1000"`
 	Step         int32             `short:"s" help:"how many docs to skip before next doc is processed, for count command means verbose step" default:"0"`
 	LogLevel     string            `help:"log level" enum:"debug,info,warn,error,fatal" default:"info"`
@@ -269,8 +268,7 @@ func execWriteCmd(filename string, worker func(reader binfile.BinWriter)) {
 
 func main() {
 	ctx := kong.Parse(&client)
-	binfile.Debug = client.Debug
-	binfile.Verbose = client.Verbose || client.Debug
+	binfile.Verbose = client.Verbose
 
 	binfile.SetGlobalLogLevel(binfile.LogLevelToEnum(client.LogLevel))
 
