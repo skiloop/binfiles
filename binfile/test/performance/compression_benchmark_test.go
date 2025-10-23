@@ -127,7 +127,8 @@ func BenchmarkLoggerQuietMode(b *testing.B) {
 func BenchmarkLoggerEnabled(b *testing.B) {
 	binfile.SetQuietMode(false)
 	defer binfile.SetQuietMode(true)
-
+	binfile.RedirectToDevNull()
+	defer binfile.SetQuietMode(true)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		binfile.LogInfo("Benchmark message %d", i)

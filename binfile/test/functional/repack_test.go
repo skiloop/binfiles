@@ -20,7 +20,7 @@ func TestRepackFunctionality(t *testing.T) {
 	defer common.CleanupTestDir(outputRoot)
 
 	// 创建测试文件
-	testDocs := common.CreateTestDocs(100)
+	testDocs := common.CreateTestDocs(1000)
 	err := common.WriteTestFile(testFile, testDocs, binfile.NONE)
 	if err != nil {
 		t.Fatalf("Create test file failed: %v", err)
@@ -107,7 +107,7 @@ func TestLargeFileHandling(t *testing.T) {
 	defer common.CleanupTestDir(outputRoot)
 
 	// 创建较大的测试文件
-	testDocs := common.CreateTestDocs(100)
+	testDocs := common.CreateTestDocs(1000)
 	testFile := filepath.Join(outputRoot, "large_test.bin")
 
 	err := common.WriteTestFile(testFile, testDocs, binfile.NONE)
@@ -151,7 +151,7 @@ func TestLargeFileHandling(t *testing.T) {
 	})
 
 	if pos < 0 {
-		t.Fatalf("Search failed for test-key-500")
+		t.Fatalf("Search failed for test-key-500: expect pos >=0, but got %d", pos)
 	}
 
 	doc, err := reader.Read(pos, true)
