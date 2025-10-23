@@ -6,7 +6,6 @@ import (
 )
 
 var Verbose = false
-var Debug = false
 
 const (
 	GZIP = iota
@@ -33,16 +32,6 @@ var CompressTypes = map[string]int{
 	"xz":     XZ,
 	"brotli": BROTLI,
 	"lz4":    LZ4,
-}
-
-func debug(format string, a ...any) {
-	if Debug {
-		LogInfo(format, a...)
-	}
-}
-
-func errorf(format string, a ...any) {
-	LogError(format, a...)
 }
 
 type outWriter struct {

@@ -119,7 +119,7 @@ func (r *fileRepack) merge(stopCh chan interface{}) {
 		}
 		count += 1
 		_ = os.Remove(filename)
-		if Debug {
+		if Verbose {
 			LogInfo("%s merged with %d bytes\n", filename, nw)
 		}
 	}
