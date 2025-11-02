@@ -274,7 +274,7 @@ func (br *binReader) simpleCount(start, end int64, no int, verboseStep uint32, k
 	})
 	LogDebug("[%d] first doc position: %d\n", no, curPos)
 	if doc == nil || curPos >= end {
-		LogDebug("no valid doc before end, start: %d, current: %d, end: %d", start, curPos, end)
+		LogDebug("[%d] no valid doc before end, start: %d, current: %d, end: %d\n", no, start, curPos, end)
 		return count
 	}
 	_ = br.resetOffset(curPos)
@@ -298,8 +298,8 @@ func (br *binReader) simpleCount(start, end int64, no int, verboseStep uint32, k
 	for {
 		// get current position
 		curPos, err = br.current()
-		if err == io.EOF {
-			LogDebug("[%d] reached EOF at %d, err: %v\n", no, curPos, err)
+		if err == io.EOF || curPos >= end {
+			LogDebug("[%d] reached EOF or end at %d, err: %v\n", no, curPos, err)
 			err = nil
 			break
 		}
