@@ -557,6 +557,8 @@ func (br *binReader) next(start, end int64, maxKeySize, maxDocSize int, regex *r
 	compressor := GlobalMemoryPool.GetDecompressor(br.docSeeker.CompressType())
 	defer GlobalMemoryPool.PutDecompressor(br.docSeeker.CompressType(), compressor)
 	for {
+		offset, _ := br.current()
+		LogDebug("current position: %d => %d, %s: %s\n", docPos, offset, hexdump(buff[:16]), printable(buff))
 		err = br.checkKey(docKey, buff, regex, maxKeySize, maxDocSize)
 		if err == nil {
 			if cap(contentBuff) < int(docKey.ContentSize) {
@@ -577,9 +579,12 @@ func (br *binReader) next(start, end int64, maxKeySize, maxDocSize int, regex *r
 			// decompress
 			err = compressor.Reset(bytes.NewReader(contentBuff))
 			if err == nil {
-				_, err = io.ReadAll(compressor)
+				var content []byte
+				content, err = io.ReadAll(compressor)
 				if err == nil {
 					// decompress success, found the doc
+					doc = &Doc{Key: docKey.Key, Content: content}
+					LogDebug("found doc at %d: %s\n", docPos, string(docKey.Key))
 					break
 				}
 			}
@@ -688,9 +693,38 @@ func (br *binReader) checkKey(doc *DocKey, buff []byte, pattern *regexp.Regexp,
 func (br *binReader) readByte(buff []byte) ([]byte, error) {
 	buff = buff[1:]
 	buff = append(buff, make([]byte, 1)...)
-	_, err := br.file.Read(buff[:1])
+	_, err := br.file.Read(buff[len(buff)-1:])
 	if err != nil {
 		return nil, err
 	}
 	return buff, nil
 }
+
+func printable(buff []byte) string {
+	dst := make([]byte, len(buff))
+	for i, b := range buff {
+		if b < 32 || b > 126 {
+			dst[i] = '.'
+		} else {
+			dst[i] = b
+		}
+	}
+	return string(dst)
+}
+
+func hexdump(buff []byte) string {
+	dst := make([]byte, len(buff)*3)
+	current := 0
+	for i, b := range buff {
+		size := i%2 + 2
+		dst[current] = hex[b>>4]
+		dst[current+1] = hex[b&0x0f]
+		if size == 3 {
+			dst[current+2] = ' '
+		}
+		current += size
+	}
+	return string(dst)
+}
+
+const hex = "0123456789abcdef"
