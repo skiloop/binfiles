@@ -157,6 +157,9 @@ func readNode(reader io.Reader, node *Node, sizeLimit int32) (nr int, err error)
 func readHeader(reader io.Reader, doc *DocKey, sizeLimit int32) (int, error) {
 	node := &Node{}
 	nr, err := readNode(reader, node, sizeLimit)
+	if err == io.EOF {
+		return 0, err
+	}
 	if err != nil {
 		return nr, ErrInvalidKey
 	}

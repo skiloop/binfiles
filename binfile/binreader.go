@@ -277,6 +277,7 @@ func (br *binReader) simpleCount(start, end int64, no int, verboseStep uint32, k
 		LogDebug("no valid doc before end, start: %d, current: %d, end: %d", start, curPos, end)
 		return count
 	}
+	_ = br.resetOffset(curPos)
 	var nextVerbose = verboseStep
 	var regex *regexp.Regexp
 	if pattern != "" {
@@ -293,7 +294,6 @@ func (br *binReader) simpleCount(start, end int64, no int, verboseStep uint32, k
 		}
 		LogInfo("[%d] start doc position: %d\n", no, curPos)
 	}
-	count++
 	var lastValidPos int64 = -1
 	for {
 		// get current position
@@ -557,8 +557,8 @@ func (br *binReader) next(start, end int64, maxKeySize, maxDocSize int, regex *r
 	compressor := GlobalMemoryPool.GetDecompressor(br.docSeeker.CompressType())
 	defer GlobalMemoryPool.PutDecompressor(br.docSeeker.CompressType(), compressor)
 	for {
-		offset, _ := br.current()
-		LogDebug("current position: %d => %d, %s: %s\n", docPos, offset, hexdump(buff[:16]), printable(buff))
+		//offset, _ := br.current()
+		//LogDebug("current position: %d => %d, %s: %s\n", docPos, offset, hexdump(buff[:16]), printable(buff))
 		err = br.checkKey(docKey, buff, regex, maxKeySize, maxDocSize)
 		if err == nil {
 			if cap(contentBuff) < int(docKey.ContentSize) {
@@ -571,7 +571,9 @@ func (br *binReader) next(start, end int64, maxKeySize, maxDocSize int, regex *r
 			nread := int(docKey.ContentSize) - len(contentBuff)
 			if nread > 0 {
 				// read more data
-				_, err = br.file.Read(contentBuff[len(contentBuff):int(docKey.ContentSize)])
+				startPos := len(contentBuff)
+				contentBuff = contentBuff[:int(docKey.ContentSize)]
+				_, err = br.file.Read(contentBuff[startPos:])
 				if err != nil {
 					break
 				}
@@ -618,8 +620,7 @@ func (br *binReader) next(start, end int64, maxKeySize, maxDocSize int, regex *r
 				if err == io.EOF {
 					reachedEnd = true
 					LogDebug("reached end of file\n")
-					buff = buff[1:]
-					if len(buff) <= 4 {
+					if len(buff) <= 5 {
 						LogDebug("buff is too short to read key\n")
 						break
 					}
