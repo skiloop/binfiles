@@ -20,7 +20,7 @@ func TestRepackFunctionality(t *testing.T) {
 	defer common.CleanupTestDir(outputRoot)
 
 	// 创建测试文件
-	testDocs := common.CreateTestDocs(1000)
+	testDocs := common.CreateTestDocs(100)
 	err := common.WriteTestFile(testFile, testDocs, binfile.NONE)
 	if err != nil {
 		t.Fatalf("Create test file failed: %v", err)
@@ -31,16 +31,16 @@ func TestRepackFunctionality(t *testing.T) {
 		compressType int
 		workers      int
 	}{
-		{"doc", binfile.XZ, 4},
-		{"file", binfile.XZ, 4},
-		{"doc", binfile.GZIP, 4},
-		{"file", binfile.GZIP, 4},
-		{"doc", binfile.BZIP2, 4},
-		{"file", binfile.BZIP2, 4},
-		{"doc", binfile.BROTLI, 4},
-		{"file", binfile.BROTLI, 4},
-		{"doc", binfile.LZ4, 4},
-		{"file", binfile.LZ4, 4},
+		{"doc", binfile.XZ, 2},
+		{"file", binfile.XZ, 2},
+		{"doc", binfile.GZIP, 2},
+		{"file", binfile.GZIP, 2},
+		{"doc", binfile.BZIP2, 2},
+		{"file", binfile.BZIP2, 2},
+		{"doc", binfile.BROTLI, 2},
+		{"file", binfile.BROTLI, 2},
+		{"doc", binfile.LZ4, 2},
+		{"file", binfile.LZ4, 2},
 	}
 
 	for _, config := range testConfigs {

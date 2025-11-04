@@ -317,7 +317,7 @@ func (br *binReader) simpleCount(start, end int64, no int, verboseStep uint32, k
 			}
 		}
 		// skip next doc
-		err = br.skipNextWithLimit(KeySizeLimit, MaxDocSize, regex)
+		err = br.skipNextWithLimit(KeySizeLimit, MaxDocSize, regex, false)
 		if err == io.EOF {
 			LogDebug("[%d] no more doc after %d\n", no, curPos)
 			err = nil
@@ -330,7 +330,7 @@ func (br *binReader) simpleCount(start, end int64, no int, verboseStep uint32, k
 				break
 			}
 			LogDebug("[%d] doc read error at %d, seek for next doc\n", no, curPos)
-			curPos += 1
+			curPos, _ = br.current()
 			pos, dc := br.next(curPos, -1, -1, -1, nil, keyOnly)
 			if dc == nil || pos >= end {
 				break
@@ -471,12 +471,12 @@ func (br *binReader) Search(opt SearchOption) int64 {
 // skipNext skip next valid doc
 // return error end of file or invalid doc
 func (br *binReader) skipNext() (err error) {
-	return br.skipNextWithLimit(KeySizeLimit, MaxDocSize, nil)
+	return br.skipNextWithLimit(KeySizeLimit, MaxDocSize, nil, true)
 }
 
 // skipNext skip next valid doc
 // return error end of file or invalid doc
-func (br *binReader) skipNextWithLimit(maxKeySize int32, maxContentSize int32, regex *regexp.Regexp) (err error) {
+func (br *binReader) skipNextWithLimit(maxKeySize int32, maxContentSize int32, regex *regexp.Regexp, reset bool) (err error) {
 
 	var offset int64
 	startOffset := int64(-1)
@@ -498,7 +498,7 @@ func (br *binReader) skipNextWithLimit(maxKeySize int32, maxContentSize int32, r
 			offset += int64(n)
 		}
 	}
-	if err != io.EOF && err != nil {
+	if err != io.EOF && err != nil && reset {
 		// reset to start offset if error
 		_, _ = br.docSeeker.Seek(startOffset, io.SeekStart)
 	}

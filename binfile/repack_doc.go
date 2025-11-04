@@ -57,7 +57,8 @@ func (r *docRepack) worker(no int) {
 				LogInfo("[%d] no more doc after %d\n", no, offset)
 				break
 			}
-			offset, doc = pos, dc
+			offset = pos
+			doc, _ = reader.Read(offset, true)
 		}
 		if offset >= end {
 			LogDebug("[%d]worker reached end %d at %d\n", no, end, offset)
