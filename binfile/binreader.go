@@ -231,7 +231,6 @@ func (br *binReader) Count(opt *CountOption) int64 {
 // count concurrently
 func (br *binReader) conCount(ch chan int64, start, end int64, no int, verboseStep uint32,
 	keyOnly bool, skipError bool, pattern string) {
-	// TODO: fix concurrent count error: count mismatch
 	LogDebug("[%d] count documents from %d to %d\n", no, start, end)
 	defer LogDebug("[%d] worker done\n", no)
 	brd, err := NewBinReader(br.filename, br.docSeeker.CompressType())
