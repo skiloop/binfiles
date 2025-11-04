@@ -29,6 +29,7 @@ type CountOption struct {
 	WorkerCount int
 	VerboseStep uint32
 	Input       string
+	Pattern     string
 	KeyOnly     bool
 	SkipError   bool
 }
@@ -61,17 +62,17 @@ type ReadOption struct {
 	Step        int32  `help:"document read interval"`
 	OutCompress int    `help:"output compress mode, only works when output not empty"`
 	Output      string `help:"output filename"`
-	KeyPattern  string `help:"key regex pattern for key searching","default:""`
+	KeyPattern  string `help:"key pattern for key searching, regex supported, default: empty"`
 
 	Repack    bool `help:"repack"`
 	SkipError bool `help:"skip error"`
 }
 
 type SearchOption struct {
-	Key       string `json:"key to search"`
-	Number    int    `json:"skip the n of found docs. If less then n docs found then return last one"`
-	Offset    int64  `json:"start offset to search"`
-	SkipError bool   `json:"continue searching when encounter doc error"`
+	Key       string `help:"key to search"`
+	Skip      int    `help:"skip the first n docs found, if less then n docs found then return last one, 0 means no skip, negative means random skip"`
+	Offset    int64  `help:"start offset to search"`
+	SkipError bool   `help:"continue searching when encounter doc error"`
 }
 
 //
@@ -132,7 +133,7 @@ func (br *binReader) ReadDocs(opt *ReadOption) {
 			if err != nil {
 				off, er := br.docSeeker.Seek(0, io.SeekCurrent)
 				if er == nil {
-					LogError("last read postion: %d\n", off)
+					LogError("last read position: %d\n", off)
 				}
 			}
 		}()
@@ -197,7 +198,7 @@ func (br *binReader) skipDocs(count int32) (err error) {
 func (br *binReader) Count(opt *CountOption) int64 {
 
 	if opt.WorkerCount <= 1 {
-		return br.simpleCount(opt.Offset, opt.End, 0, opt.VerboseStep, opt.KeyOnly, opt.SkipError)
+		return br.simpleCount(opt.Offset, opt.End, 0, opt.VerboseStep, opt.KeyOnly, opt.SkipError, opt.Pattern)
 	}
 	remainSize, err := br.docSeeker.Seek(opt.Offset, io.SeekEnd)
 	if err != nil {
@@ -210,7 +211,8 @@ func (br *binReader) Count(opt *CountOption) int64 {
 	countCh := make(chan int64, opt.WorkerCount)
 	start := opt.Offset
 	for no := 0; no < opt.WorkerCount; no++ {
-		go br.conCount(countCh, start, start+workerReadSize, no, opt.VerboseStep, opt.KeyOnly, opt.SkipError)
+		go br.conCount(countCh, start, start+workerReadSize, no, opt.VerboseStep,
+			opt.KeyOnly, opt.SkipError, opt.Pattern)
 		start += workerReadSize
 		if start-opt.Offset > remainSize {
 			break
@@ -219,9 +221,7 @@ func (br *binReader) Count(opt *CountOption) int64 {
 	total := int64(0)
 	for no := 0; no < opt.WorkerCount; no++ {
 		cnt := <-countCh
-		if cnt < 0 {
-			total = -1
-		} else {
+		if cnt > 0 {
 			total += cnt
 		}
 	}
@@ -229,8 +229,11 @@ func (br *binReader) Count(opt *CountOption) int64 {
 }
 
 // count concurrently
-func (br *binReader) conCount(ch chan int64, start, end int64, no int, verboseStep uint32, keyOnly bool, skipError bool) {
+func (br *binReader) conCount(ch chan int64, start, end int64, no int, verboseStep uint32,
+	keyOnly bool, skipError bool, pattern string) {
 	// TODO: fix concurrent count error: count mismatch
+	LogDebug("[%d] count documents from %d to %d\n", no, start, end)
+	defer LogDebug("[%d] worker done\n", no)
 	brd, err := NewBinReader(br.filename, br.docSeeker.CompressType())
 	if err != nil {
 		ch <- 0
@@ -242,23 +245,47 @@ func (br *binReader) conCount(ch chan int64, start, end int64, no int, verboseSt
 		ch <- 0
 		return
 	}
-	ch <- dr.simpleCount(start, end, no, verboseStep, keyOnly, skipError)
+	ch <- dr.simpleCount(start, end, no, verboseStep, keyOnly, skipError, pattern)
 }
 
-func (br *binReader) simpleCount(start, end int64, no int, verboseStep uint32, keyOnly bool, skipError bool) (count int64) {
+// simpleCount count documents from start to end
+// end: negative means count to end of file
+// return count of documents
+// return -1 if error
+func (br *binReader) simpleCount(start, end int64, no int, verboseStep uint32, keyOnly bool,
+	skipError bool, pattern string) (count int64) {
+	var err error
+	LogDebug("[%d] simple count documents from %d to %d\n", no, start, end)
+	if end < 0 {
+		end, err = br.docSeeker.Seek(0, io.SeekEnd)
+		if err != nil {
+			LogError("[%d] get end position error: %v\n", no, err)
+			return -1
+		}
+	}
 	count = 0
 	curPos, doc := br.Next(&SeekOption{
 		Offset:     start,
-		Pattern:    "",
+		Pattern:    pattern,
 		KeySize:    int(KeySizeLimit),
-		DocSize:    MaxDocSize,
+		DocSize:    -1,
 		End:        end,
 		Decompress: !keyOnly,
 	})
-	if doc == nil {
+	LogDebug("[%d] first doc position: %d\n", no, curPos)
+	if doc == nil || curPos >= end {
+		LogDebug("[%d] no valid doc before end, start: %d, current: %d, end: %d\n", no, start, curPos, end)
 		return count
 	}
-	var nextVerbose = uint32(1)
+	_ = br.resetOffset(curPos)
+	var nextVerbose = verboseStep
+	var regex *regexp.Regexp
+	if pattern != "" {
+		regex, _ = regexp.Compile(pattern)
+	} else {
+		regex = nil
+	}
+
 	if Verbose {
 		if end != -1 {
 			LogInfo("[%d] count how many documents from position %d to %d\n", no, start, end)
@@ -267,26 +294,20 @@ func (br *binReader) simpleCount(start, end int64, no int, verboseStep uint32, k
 		}
 		LogInfo("[%d] start doc position: %d\n", no, curPos)
 	}
-	var err error
-	count += 1
+	var lastValidPos int64 = -1
 	for {
-		curPos, _ = br.current()
-		err = br.skipNext()
-		if err == io.EOF {
+		// get current position
+		curPos, err = br.current()
+		if err == io.EOF || curPos >= end {
+			LogDebug("[%d] reached EOF or end at %d, err: %v\n", no, curPos, err)
+			err = nil
 			break
 		}
+		lastValidPos = curPos
 		if err != nil {
-			if !skipError {
-				break
-			}
-			pos, dc := br.next(curPos, -1, -1, -1, nil, keyOnly)
-			if dc == nil {
-				break
-			}
-			_ = br.resetOffset(pos)
-			continue
+			LogDebug("[%d] get current position error: %v\n", no, err)
+			break
 		}
-		count++
 		if Verbose && uint32(count) == nextVerbose {
 			LogInfo("[%d] got %10d documents from %20d to position %20d\n", no, count, start, curPos)
 			if verboseStep == 0 {
@@ -295,20 +316,38 @@ func (br *binReader) simpleCount(start, end int64, no int, verboseStep uint32, k
 				nextVerbose = nextVerbose + verboseStep
 			}
 		}
-		curPos, err = br.current()
-		if err == io.EOF || end >= 0 && curPos >= end {
+		// skip next doc
+		err = br.skipNextWithLimit(KeySizeLimit, MaxDocSize, regex, false)
+		if err == io.EOF {
+			LogDebug("[%d] no more doc after %d\n", no, curPos)
+			err = nil
 			break
 		}
 		if err != nil {
+			// failed to skip, current is reset to curPos
+			LogDebug("[%d] skip next error, pos: %d, error: %v\n", no, curPos, err)
+			if !skipError {
+				break
+			}
+			LogDebug("[%d] doc read error at %d, seek for next doc\n", no, curPos)
+			curPos, _ = br.current()
+			pos, dc := br.next(curPos, -1, -1, -1, nil, keyOnly)
+			if dc == nil || pos >= end {
+				break
+			}
+		}
+		count++
+		if curPos >= end {
+			LogDebug("[%d] end reached, current: %d\n", no, curPos)
 			break
 		}
 	}
-	if err != nil && err != io.EOF {
-		LogError("\n[%d] read doc error at %d, %v\n", no, curPos, err)
-		return -1
+	if curPos < end {
+		LogError("[%d] not all documents are counted, count: %d, curPos: %d, end: %d\n", no, count, curPos, end)
 	}
 	if Verbose {
-		LogInfo("[%d] got %10d documents from %20d to position %20d\n", no, count, start, curPos)
+		LogInfo("[%d] got %10d documents from %20d to position %20d, last valid pos: %d\n",
+			no, count, start, curPos, lastValidPos)
 	}
 	return count
 }
@@ -395,7 +434,7 @@ func (br *binReader) Search(opt SearchOption) int64 {
 	var docPos int64 = -1
 
 	var found int64 = -1
-	skip := opt.Number
+	skip := opt.Skip
 	if skip < 0 {
 		rnd := rand.New(rand.NewSource(time.Now().Unix()))
 		skip = rnd.Intn(100)
@@ -429,88 +468,188 @@ func (br *binReader) Search(opt SearchOption) int64 {
 	return found
 }
 
-// skipNext skip next doc, include invalid doc
+// skipNext skip next valid doc
+// return error end of file or invalid doc
 func (br *binReader) skipNext() (err error) {
+	return br.skipNextWithLimit(KeySizeLimit, MaxDocSize, nil, true)
+}
+
+// skipNext skip next valid doc
+// return error end of file or invalid doc
+func (br *binReader) skipNextWithLimit(maxKeySize int32, maxContentSize int32, regex *regexp.Regexp, reset bool) (err error) {
 
 	var offset int64
-	offset, err = br.docSeeker.Seek(0, io.SeekCurrent)
+	startOffset := int64(-1)
+	startOffset, err = br.docSeeker.Seek(0, io.SeekCurrent)
 	if err != nil {
 		return err
 	}
-	defer func() {
-		if err != nil {
-			_, _ = br.docSeeker.Seek(offset, io.SeekStart)
-		}
-	}()
+	offset = startOffset
+
 	// read key size
 	dk := &DocKey{}
 	var n int
 	n, err = br.docSeeker.ReadKey(dk)
-	offset += int64(n)
-	if err != nil {
-		return err
+	if err == nil {
+		if (maxKeySize > 0 && dk.KeySize > maxKeySize) || (maxContentSize > 0 && dk.ContentSize > maxContentSize) ||
+			(regex != nil && !regex.MatchString(string(dk.Key))) {
+			err = ErrInvalidDocument
+		} else {
+			offset += int64(n)
+		}
 	}
+	if err != io.EOF && err != nil && reset {
+		// reset to start offset if error
+		_, _ = br.docSeeker.Seek(startOffset, io.SeekStart)
+	}
+	//if Verbose && err == nil {
+	//	LogDebug("skip next doc: start pos: %d, key size: %d, key: %s, content size: %d\n",
+	//		startOffset, dk.KeySize, string(dk.Key), dk.ContentSize)
+	//}
 	return err
 }
 
-// next seek next valid doc, return position and document
-func (br *binReader) next(start, end int64, keySize, docSize int, regex *regexp.Regexp, decompress bool) (pos int64, doc *Doc) {
-
-	pos = start
-	if keySize <= 0 {
-		keySize = int(KeySizeLimit)
+// next seek the first valid doc after start position (start included)
+// return doc position and doc.
+// return -1 and nil if no more valid doc
+// pointer will be unchanged when exit func
+func (br *binReader) next(start, end int64, maxKeySize, maxDocSize int, regex *regexp.Regexp,
+	decompress bool) (docPos int64, doc *Doc) {
+	originalPos, _ := br.current()
+	defer func() {
+		_, _ = br.docSeeker.Seek(originalPos, io.SeekStart)
+	}()
+	LogDebug("next: start: %d, end: %d, maxKeySize: %d, maxDocSize: %d, regex: %v, decompress: %v\n", start, end, maxKeySize, maxDocSize, regex, decompress)
+	docPos = start
+	if maxKeySize <= 0 {
+		maxKeySize = int(KeySizeLimit)
 	}
-	err := br.resetOffset(pos)
+	err := br.resetOffset(start)
 	if err == io.EOF {
 		return -1, nil
 	}
-	buff := make([]byte, int(unsafe.Sizeof(int32(0)))*2+int(KeySizeLimit))
-
-	_, err = br.file.Read(buff)
+	// buf to read header
+	buff := make([]byte, int(unsafe.Sizeof(int32(0)))*2+int(maxKeySize))
+	var nRead int
+	nRead, err = br.file.Read(buff)
 	if err != nil {
-		//TODO: doc size not larger than len(buff)
 		if err == io.EOF {
 			return 0, nil
 		}
 		LogError("read file error: %v\n", err)
 		return 0, nil
 	}
-	var docKey *DocKey
+	if nRead <= 8 {
+		// not enough data read
+		return 0, nil
+	}
+	docKey := &DocKey{
+		KeySize:     0,
+		ContentSize: 0,
+		Key:         make([]byte, maxKeySize),
+	}
+	// number of bytes read from pos
+	var nBytes int64 = 0
+	searchedSize := int64(0)
+	nextVerbose := int64(1024)
+	reachedEnd := false
+	contentBuff := make([]byte, 0, 1024)
+	compressor := GlobalMemoryPool.GetDecompressor(br.docSeeker.CompressType())
+	defer GlobalMemoryPool.PutDecompressor(br.docSeeker.CompressType(), compressor)
 	for {
-		docKey, err = br.checkKey(buff, regex, keySize, docSize)
-		if err != nil {
-			break
-		}
-		if docKey != nil {
-			doc, err = br.docSeeker.ReadAt(pos, decompress)
-			if doc != nil {
-				break
+		//offset, _ := br.current()
+		//LogDebug("current position: %d => %d, %s: %s\n", docPos, offset, hexdump(buff[:16]), printable(buff))
+		err = br.checkKey(docKey, buff, regex, maxKeySize, maxDocSize)
+		if err == nil {
+			if cap(contentBuff) < int(docKey.ContentSize) {
+				contentBuff = make([]byte, 0, int(docKey.ContentSize))
 			}
-			// skip to doc value
-			_, _ = br.file.Seek(pos+int64(len(buff)), io.SeekStart)
-		}
-		buff, err = br.readByte(buff)
-		if err != nil {
-			break
-		}
-		pos += 1
-		if Verbose {
-			nBytes := pos - start
-			if nBytes < 1024 {
-				LogInfo("%10d\t%10d bytes search\n", pos, nBytes)
+			cBytes := len(buff) - int(docKey.KeySize) - 8
+			if cBytes > 0 {
+				contentBuff = append(contentBuff, buff[int(docKey.KeySize)+8:]...)
+			}
+			nread := int(docKey.ContentSize) - len(contentBuff)
+			if nread > 0 {
+				// read more data
+				startPos := len(contentBuff)
+				contentBuff = contentBuff[:int(docKey.ContentSize)]
+				_, err = br.file.Read(contentBuff[startPos:])
+				if err != nil {
+					break
+				}
+			}
+			// decompress
+			err = compressor.Reset(bytes.NewReader(contentBuff))
+			if err == nil {
+				var content []byte
+				content, err = io.ReadAll(compressor)
+				if err == nil {
+					// decompress success, found the doc
+					doc = &Doc{Key: docKey.Key, Content: content}
+					LogDebug("found doc at %d: %s\n", docPos, string(docKey.Key))
+					break
+				}
+			}
+			// decompress failed
+			// skip 8 + keySize
+			nBytes = int64(4 + int32(docKey.KeySize))
+
+			if len(contentBuff) > cap(buff) {
+				// copy from content
+				copy(buff, contentBuff)
+				// seek back to start of content + len(buff)
+				_, _ = br.file.Seek(int64(len(buff)-len(contentBuff)), io.SeekCurrent)
 			} else {
-				LogInfo("%10d\t%10dk search\n", pos, nBytes/1024)
+				// copy from content
+				nread = copy(buff, contentBuff)
+				// read more bytes
+				_, err = br.file.Read(buff[nread:])
+				if err != nil {
+					break
+				}
 			}
+		} else {
+			if reachedEnd {
+				buff = buff[1:]
+				if len(buff) <= 4 {
+					LogDebug("buff is too short to read key\n")
+					break
+				}
+			} else {
+				buff, err = br.readByte(buff)
+				if err == io.EOF {
+					reachedEnd = true
+					LogDebug("reached end of file\n")
+					if len(buff) <= 5 {
+						LogDebug("buff is too short to read key\n")
+						break
+					}
+				} else if err != nil {
+					break
+				}
+			}
+			nBytes = 1
 		}
-		if end > 0 && pos > end {
+		searchedSize = docPos - start
+
+		if Verbose && searchedSize >= nextVerbose {
+			searchSizeStr := GetHumanReadableSize(searchedSize)
+			LogInfo("%10d\t%10s is searched\n", docPos, searchSizeStr)
+			nextVerbose += nextVerbose / 2
+		}
+		// next position to check
+		docPos += nBytes
+		if end > 0 && docPos > end {
 			break
 		}
+		nBytes = 0
 	}
 	if err != nil {
+		_ = br.resetOffset(originalPos)
 		LogError("seek next error: %v\n", err)
 		return -1, nil
 	}
-	return pos, doc
+	return docPos, doc
 }
 
 // Next document position
@@ -527,50 +666,66 @@ func (br *binReader) Next(opt *SeekOption) (pos int64, doc *Doc) {
 	return br.next(opt.Offset, opt.End, opt.KeySize, opt.DocSize, regex, opt.Decompress)
 }
 
-func (br *binReader) checkKey(buff []byte, pattern *regexp.Regexp,
-	keyLimit, contentLimit int) (*DocKey, error) {
-	var size int32
+// checkKey check if is valid doc header
+func (br *binReader) checkKey(doc *DocKey, buff []byte, pattern *regexp.Regexp,
+	maxKeySize, maxContentSize int) error {
+	if len(buff) <= 8 {
+		return ErrInvalidDocument
+	}
+	// read key size
 	r := bytes.NewBuffer(buff)
-	_, _ = readInt32(r, &size)
-	ks := size + 4
-	if size <= 0 || size > int32(len(buff)-8) || keyLimit > 0 && int32(keyLimit) < size ||
-		pattern != nil && !pattern.MatchString(string(buff[4:ks])) {
-		return nil, nil
+	_, _ = readInt32(r, &doc.KeySize)
+	if doc.KeySize <= 0 || doc.KeySize > int32(len(buff)-8) || maxKeySize > 0 && int32(maxKeySize) < doc.KeySize {
+		return ErrInvalidDocument
 	}
-	doc := &DocKey{
-		KeySize:     size,
-		ContentSize: 0,
-		Key:         buff[4:ks],
+	doc.Key = make([]byte, doc.KeySize)
+	_, _ = r.Read(doc.Key)
+	if pattern != nil && !pattern.MatchString(string(doc.Key)) {
+		return ErrInvalidDocument
 	}
-	ks += 4
-	if ks < int32(len(buff)) {
-		r = bytes.NewBuffer(buff[ks:])
-		_, _ = readInt32(r, &size)
-		if size < 0 || contentLimit > 0 && int32(contentLimit) < size {
-			return nil, nil
-		}
-		doc.ContentSize = size
-		return doc, nil
+
+	_, _ = readInt32(r, &doc.ContentSize)
+	if doc.ContentSize < 0 || maxContentSize > 0 && int32(maxContentSize) < doc.ContentSize {
+		return ErrInvalidDocument
 	}
-	buff = append(buff, make([]byte, int(ks)-len(buff))...)
-	_, err := br.file.Read(buff[ks:])
-	if err != nil {
-		return nil, err
-	}
-	_, _ = readInt32(r, &size)
-	if contentLimit > 0 && int32(contentLimit) < size {
-		_, _ = br.file.Seek(-4, io.SeekCurrent)
-		return nil, nil
-	}
-	doc.ContentSize = size
-	return doc, nil
+	return nil
+
 }
 func (br *binReader) readByte(buff []byte) ([]byte, error) {
 	buff = buff[1:]
 	buff = append(buff, make([]byte, 1)...)
-	_, err := br.file.Read(buff[:1])
+	_, err := br.file.Read(buff[len(buff)-1:])
 	if err != nil {
 		return nil, err
 	}
 	return buff, nil
 }
+
+func printable(buff []byte) string {
+	dst := make([]byte, len(buff))
+	for i, b := range buff {
+		if b < 32 || b > 126 {
+			dst[i] = '.'
+		} else {
+			dst[i] = b
+		}
+	}
+	return string(dst)
+}
+
+func hexdump(buff []byte) string {
+	dst := make([]byte, len(buff)*3)
+	current := 0
+	for i, b := range buff {
+		size := i%2 + 2
+		dst[current] = hex[b>>4]
+		dst[current+1] = hex[b&0x0f]
+		if size == 3 {
+			dst[current+2] = ' '
+		}
+		current += size
+	}
+	return string(dst)
+}
+
+const hex = "0123456789abcdef"

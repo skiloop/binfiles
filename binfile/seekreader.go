@@ -26,17 +26,21 @@ func NewSeeker(rs io.ReadSeeker, compressType int) SeekReader {
 }
 
 // ReadAt read doc at specified position
+// current position if negative
+// only seek if offset is positive
 func (sr *seekReader) ReadAt(offset int64, decompress bool) (doc *Doc, err error) {
-	_, err = sr.rs.Seek(offset, io.SeekStart)
-	if err != nil {
-		return nil, err
+	if offset >= 0 {
+		_, err = sr.rs.Seek(offset, io.SeekStart)
+		if err != nil {
+			return nil, err
+		}
 	}
 	return sr.Read(decompress)
 }
 
 // ReadKey read doc key at current position
 func (sr *seekReader) ReadKey(doc *DocKey) (n int, err error) {
-	n, err = readHeader(sr.rs, doc)
+	n, err = readHeader(sr.rs, doc, KeySizeLimit)
 	if err != nil {
 		return n, err
 	}
