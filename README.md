@@ -29,7 +29,7 @@ binutil repack source.bin target.bin --target-compress=gzip
 ## TODO
 
 ### Feature Enhancements
-- [ ] add tests (improve test coverage)
+- [x] add tests (improve test coverage)
 - [ ] add file buffer (file buffer optimization)
 - [ ] add doc index (document indexing functionality)
 - [ ] Implement file header and version control
@@ -37,7 +37,7 @@ binutil repack source.bin target.bin --target-compress=gzip
 - [ ] Add batch I/O operations optimization
 
 ### Performance Optimization
-- [ ] Fix concurrent counting bug (TODO in binreader.go)
+- [x] Fix concurrent counting bug
 - [ ] Optimize worker pool management
 - [ ] Improve file locking mechanism
 - [ ] Add read-ahead buffer
@@ -53,14 +53,14 @@ binutil repack source.bin target.bin --target-compress=gzip
 - [ ] Integrate golangci-lint
 
 ### Testing and Documentation
-- [ ] Add integration tests
-- [ ] Large file processing tests
-- [ ] Concurrency safety tests
+- [x] Add integration tests
+- [x] Large file processing tests
+- [x] Concurrency safety tests
 - [ ] Error recovery tests
 - [ ] Memory leak tests
 - [ ] Complete API documentation
 - [ ] Add usage examples
-- [ ] Provide performance benchmarks
+- [x] Provide performance benchmarks
 
 ### Tools and Monitoring
 - [ ] Improve command-line tool error messages
@@ -72,5 +72,5 @@ binutil repack source.bin target.bin --target-compress=gzip
 
 ## Known Issues
 - [ ] doc missing when merge
-- [ ] Concurrent counting mismatch issue
+- [x] Concurrent counting mismatch issue
 - [ ] Incomplete file corruption handling
