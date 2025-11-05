@@ -1,22 +1,19 @@
-package functional
+package binfile
 
 import (
 	"os"
 	"path/filepath"
 	"testing"
-
-	"github.com/skiloop/binfiles/binfile"
-	"github.com/skiloop/binfiles/binfile/test/common"
 )
 
-// TestSearchFunctionality 测试搜索功能
-func TestSearchFunctionality(t *testing.T) {
-	root := common.GetTestDir("test_search")
-	os.MkdirAll(root, 0755)
-	defer common.CleanupTestDir(root)
+// TestSearch 测试搜索功能
+func TestSearch(t *testing.T) {
+	root := GetTestDir("test_search")
+	_ = os.MkdirAll(root, 0755)
+	defer CleanupTestDir(root)
 
 	// 创建包含特定键的测试文档
-	testDocs := []*binfile.Doc{
+	testDocs := []*Doc{
 		{Key: []byte("test-key-1"), Content: []byte("content1")},
 		{Key: []byte("test-key-2"), Content: []byte("content2")},
 		{Key: []byte("special-key"), Content: []byte("special-content")},
@@ -24,12 +21,12 @@ func TestSearchFunctionality(t *testing.T) {
 	}
 
 	testFile := filepath.Join(root, "test.bin")
-	err := common.WriteTestFile(testFile, testDocs, binfile.NONE)
+	err := WriteTestFile(testFile, testDocs, NONE)
 	if err != nil {
 		t.Fatalf("Write test file failed: %v", err)
 	}
 
-	reader, err := binfile.NewBinReader(testFile, binfile.NONE)
+	reader, err := NewBinReader(testFile, NONE)
 	if err != nil {
 		t.Fatalf("NewBinReader failed: %v", err)
 	}
@@ -47,7 +44,7 @@ func TestSearchFunctionality(t *testing.T) {
 
 	for _, test := range searchTests {
 		t.Run(test.pattern, func(t *testing.T) {
-			pos := reader.Search(binfile.SearchOption{
+			pos := reader.Search(SearchOption{
 				Key:    test.pattern,
 				Skip:   0,
 				Offset: 0,

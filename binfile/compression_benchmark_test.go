@@ -1,13 +1,10 @@
-package performance
+package binfile
 
 import (
 	"fmt"
 	"runtime"
 	"testing"
 	"time"
-
-	"github.com/skiloop/binfiles/binfile"
-	"github.com/skiloop/binfiles/binfile/test/common"
 )
 
 // BenchmarkCompressionOriginal 基准测试原始压缩方法
@@ -19,7 +16,7 @@ func BenchmarkCompressionOriginal(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = binfile.CompressOriginal(data, binfile.GZIP)
+		_, _ = CompressOriginal(data, GZIP)
 	}
 }
 
@@ -32,20 +29,20 @@ func BenchmarkCompressionWithPool(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = binfile.Compress(data, binfile.GZIP)
+		_, _ = Compress(data, GZIP)
 	}
 }
 
 // BenchmarkCompressionTypes 基准测试不同压缩类型
 func BenchmarkCompressionTypes(b *testing.B) {
-	testData := []byte(common.RandStringBytesMaskImprSrc(4096 * 1024)) // 4MB
-	compressionTypes := []int{binfile.GZIP, binfile.BROTLI, binfile.BZIP2, binfile.LZ4, binfile.XZ}
+	testData := []byte(RandStringBytesMaskImprSrc(4096 * 1024)) // 4MB
+	compressionTypes := []int{GZIP, BROTLI, BZIP2, LZ4, XZ}
 
 	for _, compType := range compressionTypes {
-		compTypeName := common.GetCompressionTypeName(compType)
+		compTypeName := GetCompressionTypeName(compType)
 		b.Run(fmt.Sprintf("Original_%s", compTypeName), func(b *testing.B) {
 			for i := 0; i < b.N; i++ {
-				_, err := binfile.CompressOriginal(testData, compType)
+				_, err := CompressOriginal(testData, compType)
 				if err != nil {
 					b.Fatalf("Compression failed: %v", err)
 				}
@@ -54,7 +51,7 @@ func BenchmarkCompressionTypes(b *testing.B) {
 
 		b.Run(fmt.Sprintf("Optimized_%s", compTypeName), func(b *testing.B) {
 			for i := 0; i < b.N; i++ {
-				_, err := binfile.GlobalMemoryPool.CompressWithPool(testData, compType)
+				_, err := GlobalMemoryPool.CompressWithPool(testData, compType)
 				if err != nil {
 					b.Fatalf("Compression failed: %v", err)
 				}
@@ -65,22 +62,22 @@ func BenchmarkCompressionTypes(b *testing.B) {
 
 // BenchmarkDocumentCompression 基准测试文档压缩
 func BenchmarkDocumentCompression(b *testing.B) {
-	testDoc := &binfile.Doc{
+	testDoc := &Doc{
 		Key:     []byte("test_document"),
-		Content: []byte(common.RandStringBytesMaskImprSrc(2048 * 1024)), // 2MB
+		Content: []byte(RandStringBytesMaskImprSrc(2048 * 1024)), // 2MB
 	}
 
-	compressionTypes := []int{binfile.NONE, binfile.GZIP, binfile.BROTLI, binfile.BZIP2, binfile.LZ4, binfile.XZ}
-	optCompressor := &binfile.OptimizedDocCompressor{}
+	compressionTypes := []int{NONE, GZIP, BROTLI, BZIP2, LZ4, XZ}
+	optCompressor := &OptimizedDocCompressor{}
 	// 使用原始压缩方法而不是oldCompressor
 	// oldCompressor := &binfile.OldCompressor{}
 
 	for _, compType := range compressionTypes {
-		compTypeName := common.GetCompressionTypeName(compType)
+		compTypeName := GetCompressionTypeName(compType)
 
 		b.Run(fmt.Sprintf("Original_%s", compTypeName), func(b *testing.B) {
 			for i := 0; i < b.N; i++ {
-				_, err := binfile.CompressOriginal(testDoc.Content, compType)
+				_, err := CompressOriginal(testDoc.Content, compType)
 				if err != nil {
 					b.Fatalf("Document compression failed: %v", err)
 				}
@@ -100,8 +97,8 @@ func BenchmarkDocumentCompression(b *testing.B) {
 
 // BenchmarkMemoryPoolReuse 基准测试内存池复用
 func BenchmarkMemoryPoolReuse(b *testing.B) {
-	pool := binfile.NewMemoryPool()
-	testData := []byte(common.RandStringBytesMaskImprSrc(1024))
+	pool := NewMemoryPool()
+	testData := []byte(RandStringBytesMaskImprSrc(1024))
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -114,24 +111,24 @@ func BenchmarkMemoryPoolReuse(b *testing.B) {
 
 // BenchmarkLoggerQuietMode 基准测试日志静默模式
 func BenchmarkLoggerQuietMode(b *testing.B) {
-	binfile.SetQuietMode(true)
-	defer binfile.SetQuietMode(false)
+	SetQuietMode(true)
+	defer SetQuietMode(false)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		binfile.LogInfo("Benchmark message %d", i)
+		LogInfo("Benchmark message %d", i)
 	}
 }
 
 // BenchmarkLoggerEnabled 基准测试日志启用模式
 func BenchmarkLoggerEnabled(b *testing.B) {
-	binfile.SetQuietMode(false)
-	defer binfile.SetQuietMode(true)
-	binfile.RedirectToDevNull()
-	defer binfile.SetQuietMode(true)
+	SetQuietMode(false)
+	defer SetQuietMode(true)
+	RedirectToDevNull()
+	defer SetQuietMode(true)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		binfile.LogInfo("Benchmark message %d", i)
+		LogInfo("Benchmark message %d", i)
 	}
 }
 
@@ -146,7 +143,7 @@ func TestMemoryPoolPerformance(t *testing.T) {
 	// 测试原始压缩方法
 	start := time.Now()
 	for i := 0; i < 1000; i++ {
-		_, err := binfile.CompressOriginal(testData, binfile.GZIP)
+		_, err := CompressOriginal(testData, GZIP)
 		if err != nil {
 			t.Fatalf("CompressOriginal failed: %v", err)
 		}
@@ -156,7 +153,7 @@ func TestMemoryPoolPerformance(t *testing.T) {
 	// 测试内存池压缩方法
 	start = time.Now()
 	for i := 0; i < 1000; i++ {
-		_, err := binfile.Compress(testData, binfile.GZIP)
+		_, err := Compress(testData, GZIP)
 		if err != nil {
 			t.Fatalf("Compress with pool failed: %v", err)
 		}
@@ -175,9 +172,9 @@ func TestMemoryPoolPerformance(t *testing.T) {
 
 // TestCompressDocWithPool 测试文档压缩的内存池优化
 func TestCompressDocWithPool(t *testing.T) {
-	optCompressor := binfile.OptimizedDocCompressor{}
+	optCompressor := OptimizedDocCompressor{}
 	// 使用原始压缩方法
-	doc := &binfile.Doc{
+	doc := &Doc{
 		Key:     []byte("test-key"),
 		Content: make([]byte, 512),
 	}
@@ -190,7 +187,7 @@ func TestCompressDocWithPool(t *testing.T) {
 	// 测试原始方法
 	start := time.Now()
 	for i := 0; i < 100; i++ {
-		_, err := binfile.CompressOriginal(doc.Content, binfile.GZIP)
+		_, err := CompressOriginal(doc.Content, GZIP)
 		if err != nil {
 			t.Fatalf("CompressOriginal failed: %v", err)
 		}
@@ -200,7 +197,7 @@ func TestCompressDocWithPool(t *testing.T) {
 	// 测试内存池方法
 	start = time.Now()
 	for i := 0; i < 100; i++ {
-		_, err := optCompressor.CompressDoc(doc, binfile.GZIP)
+		_, err := optCompressor.CompressDoc(doc, GZIP)
 		if err != nil {
 			t.Fatalf("CompressDoc with pool failed: %v", err)
 		}
@@ -219,8 +216,8 @@ func TestMemoryPoolConcurrency(t *testing.T) {
 		const iterations = 100
 
 		done := make(chan bool, goroutines)
-		testData := []byte(common.RandStringBytesMaskImprSrc(1024))
-		compTypes := []int{binfile.GZIP, binfile.BROTLI, binfile.BZIP2, binfile.LZ4, binfile.XZ}
+		testData := []byte(RandStringBytesMaskImprSrc(1024))
+		compTypes := []int{GZIP, BROTLI, BZIP2, LZ4, XZ}
 
 		for i := 0; i < goroutines; i++ {
 			go func(id int) {
@@ -230,7 +227,7 @@ func TestMemoryPoolConcurrency(t *testing.T) {
 					// 测试不同的压缩类型
 					compType := compTypes[j%len(compTypes)]
 
-					result, err := binfile.Compress(testData, compType)
+					result, err := Compress(testData, compType)
 					if err != nil {
 						t.Errorf("Goroutine %d, iteration %d compression failed: %v", id, j, err)
 						return
@@ -256,19 +253,19 @@ func TestMemoryPoolConcurrency(t *testing.T) {
 // TestOptimizedVsOriginalPerformance 测试优化版本与原始版本的性能对比
 func TestOptimizedVsOriginalPerformance(t *testing.T) {
 	// 创建测试数据
-	testData := []byte(common.RandStringBytesMaskImprSrc(4096))
-	compressionTypes := common.GetAllCompressionTypes()
+	testData := []byte(RandStringBytesMaskImprSrc(4096))
+	compressionTypes := GetAllCompressionTypes()
 	tests := []struct {
 		testType     string
 		name         string
 		compressFunc func([]byte, int) ([]byte, error)
 	}{
-		{testType: "Original", name: "Original compression", compressFunc: binfile.CompressOriginal},
-		{testType: "Optimized", name: "Optimized compression", compressFunc: binfile.Compress},
+		{testType: "Original", name: "Original compression", compressFunc: CompressOriginal},
+		{testType: "Optimized", name: "Optimized compression", compressFunc: Compress},
 	}
 
 	for _, compType := range compressionTypes {
-		compTypeName := common.GetCompressionTypeName(compType)
+		compTypeName := GetCompressionTypeName(compType)
 		t.Run(fmt.Sprintf("Compression_%s", compTypeName), func(t *testing.T) {
 
 			// 测试方法

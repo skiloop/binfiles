@@ -1,4 +1,4 @@
-package common
+package binfile
 
 import (
 	"fmt"
@@ -7,8 +7,6 @@ import (
 	"path"
 	"runtime"
 	"time"
-
-	"github.com/skiloop/binfiles/binfile"
 )
 
 const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
@@ -58,19 +56,19 @@ func RandStringBytesMaskImprSrc(n int) string {
 	return string(b)
 }
 
-// CreateRandomDoc 创建随机文档
-func CreateRandomDoc() *binfile.Doc {
-	return &binfile.Doc{
-		Key:     []byte(RandStringBytesMaskImprSrc(10)),
-		Content: []byte(RandStringBytesMaskImprSrc(100)),
-	}
-}
+//// CreateRandomDoc 创建随机文档
+//func CreateRandomDoc() *Doc {
+//	return &Doc{
+//		Key:     []byte(RandStringBytesMaskImprSrc(10)),
+//		Content: []byte(RandStringBytesMaskImprSrc(100)),
+//	}
+//}
 
 // CreateTestDocs 创建测试文档集合
-func CreateTestDocs(count int) []*binfile.Doc {
-	docs := make([]*binfile.Doc, count)
+func CreateTestDocs(count int) []*Doc {
+	docs := make([]*Doc, count)
 	for i := 0; i < count; i++ {
-		docs[i] = &binfile.Doc{
+		docs[i] = &Doc{
 			Key:     []byte(fmt.Sprintf("test-key-%d", i)),
 			Content: []byte(RandStringBytesMaskImprSrc(1024)),
 		}
@@ -81,17 +79,17 @@ func CreateTestDocs(count int) []*binfile.Doc {
 // GetCompressionTypeName 获取压缩类型名称
 func GetCompressionTypeName(compType int) string {
 	switch compType {
-	case binfile.NONE:
+	case NONE:
 		return "none"
-	case binfile.GZIP:
+	case GZIP:
 		return "gzip"
-	case binfile.BROTLI:
+	case BROTLI:
 		return "brotli"
-	case binfile.BZIP2:
+	case BZIP2:
 		return "bzip2"
-	case binfile.LZ4:
+	case LZ4:
 		return "lz4"
-	case binfile.XZ:
+	case XZ:
 		return "xz"
 	default:
 		return "unknown"
@@ -100,17 +98,19 @@ func GetCompressionTypeName(compType int) string {
 
 // GetAllCompressionTypes 获取所有压缩类型
 func GetAllCompressionTypes() []int {
-	return []int{binfile.NONE, binfile.GZIP, binfile.BROTLI, binfile.BZIP2, binfile.LZ4, binfile.XZ}
+	return []int{NONE, GZIP, BROTLI, BZIP2, LZ4, XZ}
 }
 
 // WriteTestFile 写入测试文件
-func WriteTestFile(filename string, docs []*binfile.Doc, compressType int) error {
-	bw := binfile.NewBinWriter(filename, compressType)
+func WriteTestFile(filename string, docs []*Doc, compressType int) error {
+	bw := NewBinWriter(filename, compressType)
 	err := bw.Open()
 	if err != nil {
 		return err
 	}
-	defer bw.Close()
+	defer func() {
+		_ = bw.Close()
+	}()
 
 	for _, doc := range docs {
 		_, err = bw.Write(doc)
@@ -123,5 +123,5 @@ func WriteTestFile(filename string, docs []*binfile.Doc, compressType int) error
 
 // CleanupTestDir 清理测试目录
 func CleanupTestDir(dir string) {
-	os.RemoveAll(dir)
+	_ = os.RemoveAll(dir)
 }

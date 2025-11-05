@@ -1,27 +1,24 @@
-package unit
+package binfile
 
 import (
 	"bytes"
 	"testing"
-
-	"github.com/skiloop/binfiles/binfile"
-	"github.com/skiloop/binfiles/binfile/test/common"
 )
 
 // TestCompressionDecompression 测试压缩和解压缩功能
 func TestCompressionDecompression(t *testing.T) {
-	compressTypes := common.GetAllCompressionTypes()
-	data := []byte(common.RandStringBytesMaskImprSrc(1024))
+	compressTypes := GetAllCompressionTypes()
+	data := []byte(RandStringBytesMaskImprSrc(1024))
 
 	for _, compressType := range compressTypes {
-		t.Run(common.GetCompressionTypeName(compressType), func(t *testing.T) {
+		t.Run(GetCompressionTypeName(compressType), func(t *testing.T) {
 			// 测试原始压缩方法
-			compressed, err := binfile.CompressOriginal(data, compressType)
+			compressed, err := CompressOriginal(data, compressType)
 			if err != nil {
 				t.Fatalf("compress error: %v", err)
 			}
 
-			decompressed, err := binfile.Decompress(compressed, compressType)
+			decompressed, err := Decompress(compressed, compressType)
 			if err != nil {
 				t.Fatalf("decompress error: %v", err)
 			}
@@ -35,17 +32,17 @@ func TestCompressionDecompression(t *testing.T) {
 
 // TestMemoryPoolCompression 测试内存池压缩功能
 func TestMemoryPoolCompression(t *testing.T) {
-	compressTypes := common.GetAllCompressionTypes()
-	data := []byte(common.RandStringBytesMaskImprSrc(1024))
+	compressTypes := GetAllCompressionTypes()
+	data := []byte(RandStringBytesMaskImprSrc(1024))
 
 	for _, compressType := range compressTypes {
-		t.Run(common.GetCompressionTypeName(compressType), func(t *testing.T) {
-			compressed, err := binfile.GlobalMemoryPool.CompressWithPool(data, compressType)
+		t.Run(GetCompressionTypeName(compressType), func(t *testing.T) {
+			compressed, err := GlobalMemoryPool.CompressWithPool(data, compressType)
 			if err != nil || len(compressed) == 0 {
 				t.Fatalf("compress error: %v", err)
 			}
 
-			decompressed, err := binfile.DecompressOriginal(compressed, compressType)
+			decompressed, err := DecompressOriginal(compressed, compressType)
 			if err != nil {
 				t.Fatalf("decompress error: %v", err)
 			}
@@ -59,20 +56,20 @@ func TestMemoryPoolCompression(t *testing.T) {
 
 // TestDocCompression 测试文档压缩功能
 func TestDocCompression(t *testing.T) {
-	compressTypes := common.GetAllCompressionTypes()
-	doc := &binfile.Doc{
+	compressTypes := GetAllCompressionTypes()
+	doc := &Doc{
 		Key:     []byte("test-key"),
-		Content: []byte(common.RandStringBytesMaskImprSrc(1024)),
+		Content: []byte(RandStringBytesMaskImprSrc(1024)),
 	}
 
 	for _, compressType := range compressTypes {
-		t.Run(common.GetCompressionTypeName(compressType), func(t *testing.T) {
-			compressed, err := binfile.CompressDoc(doc, compressType)
+		t.Run(GetCompressionTypeName(compressType), func(t *testing.T) {
+			compressed, err := CompressDoc(doc, compressType)
 			if err != nil {
 				t.Fatalf("compress error: %v", err)
 			}
 
-			decompressed, err := binfile.DecompressDoc(compressed, compressType, false)
+			decompressed, err := DecompressDoc(compressed, compressType, false)
 			if err != nil {
 				t.Fatalf("decompress error: %v", err)
 			}
@@ -86,7 +83,7 @@ func TestDocCompression(t *testing.T) {
 
 // TestMemoryPoolReuse 测试内存池的复用功能
 func TestMemoryPoolReuse(t *testing.T) {
-	pool := binfile.NewMemoryPool()
+	pool := NewMemoryPool()
 
 	// 获取和归还缓冲区
 	buf1 := pool.GetBuffer()
@@ -116,15 +113,15 @@ func TestLoggerBasic(t *testing.T) {
 	var buf bytes.Buffer
 
 	// 设置日志输出到缓冲区
-	binfile.SetGlobalLogOutput(&buf)
-	binfile.EnableGlobalLog()
-	binfile.SetGlobalLogLevel(binfile.DEBUG)
+	SetGlobalLogOutput(&buf)
+	EnableGlobalLog()
+	SetGlobalLogLevel(DEBUG)
 
 	// 测试各种日志级别
-	binfile.LogDebug("Debug message")
-	binfile.LogInfo("Info message")
-	binfile.LogWarn("Warn message")
-	binfile.LogError("Error message")
+	LogDebug("Debug message")
+	LogInfo("Info message")
+	LogWarn("Warn message")
+	LogError("Error message")
 
 	// 检查输出
 	if buf.String() == "" {
@@ -149,19 +146,19 @@ func TestLoggerBasic(t *testing.T) {
 // TestLoggerQuietMode 测试日志静默模式
 func TestLoggerQuietMode(t *testing.T) {
 	var buf bytes.Buffer
-	binfile.SetGlobalLogOutput(&buf)
+	SetGlobalLogOutput(&buf)
 
 	// 测试静默模式
-	binfile.SetQuietMode(true)
-	binfile.LogInfo("This should not appear")
+	SetQuietMode(true)
+	LogInfo("This should not appear")
 
 	if buf.Len() > 0 {
 		t.Error("Expected no output in quiet mode, but got:", buf.String())
 	}
 
 	// 恢复输出
-	binfile.SetQuietMode(false)
-	binfile.LogInfo("This should appear")
+	SetQuietMode(false)
+	LogInfo("This should appear")
 
 	if buf.Len() == 0 {
 		t.Error("Expected output after disabling quiet mode")
@@ -171,16 +168,16 @@ func TestLoggerQuietMode(t *testing.T) {
 // TestLoggerLevels 测试日志级别过滤
 func TestLoggerLevels(t *testing.T) {
 	var buf bytes.Buffer
-	binfile.SetGlobalLogOutput(&buf)
-	binfile.EnableGlobalLog()
+	SetGlobalLogOutput(&buf)
+	EnableGlobalLog()
 
 	// 测试不同日志级别
-	binfile.SetGlobalLogLevel(binfile.WARN)
+	SetGlobalLogLevel(WARN)
 
-	binfile.LogDebug("Debug - should not appear")
-	binfile.LogInfo("Info - should not appear")
-	binfile.LogWarn("Warn - should appear")
-	binfile.LogError("Error - should appear")
+	LogDebug("Debug - should not appear")
+	LogInfo("Info - should not appear")
+	LogWarn("Warn - should appear")
+	LogError("Error - should appear")
 
 	// 检查DEBUG和INFO消息不应该出现
 	if bytes.Contains(buf.Bytes(), []byte("Debug - should not appear")) {

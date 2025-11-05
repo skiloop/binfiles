@@ -1,4 +1,4 @@
-package functional
+package binfile
 
 import (
 	"fmt"
@@ -6,22 +6,19 @@ import (
 	"path/filepath"
 	"reflect"
 	"testing"
-
-	"github.com/skiloop/binfiles/binfile"
-	"github.com/skiloop/binfiles/binfile/test/common"
 )
 
 // TestRepackFunctionality 测试repack功能
 func TestRepackFunctionality(t *testing.T) {
-	binfile.RedirectToDevNull()
-	outputRoot := common.GetTestDir("repack_functional_test")
+	RedirectToDevNull()
+	outputRoot := GetTestDir("repack_functional_test")
 	testFile := filepath.Join(outputRoot, "test.bin")
-	os.MkdirAll(outputRoot, 0755)
-	defer common.CleanupTestDir(outputRoot)
+	_ = os.MkdirAll(outputRoot, 0755)
+	defer CleanupTestDir(outputRoot)
 
 	// 创建测试文件
-	testDocs := common.CreateTestDocs(100)
-	err := common.WriteTestFile(testFile, testDocs, binfile.NONE)
+	testDocs := CreateTestDocs(100)
+	err := WriteTestFile(testFile, testDocs, NONE)
 	if err != nil {
 		t.Fatalf("Create test file failed: %v", err)
 	}
@@ -31,24 +28,24 @@ func TestRepackFunctionality(t *testing.T) {
 		compressType int
 		workers      int
 	}{
-		{"doc", binfile.XZ, 2},
-		{"file", binfile.XZ, 2},
-		{"doc", binfile.GZIP, 2},
-		{"file", binfile.GZIP, 2},
-		{"doc", binfile.BZIP2, 2},
-		{"file", binfile.BZIP2, 2},
-		{"doc", binfile.BROTLI, 2},
-		{"file", binfile.BROTLI, 2},
-		{"doc", binfile.LZ4, 2},
-		{"file", binfile.LZ4, 2},
+		{"doc", XZ, 2},
+		{"file", XZ, 2},
+		{"doc", GZIP, 2},
+		{"file", GZIP, 2},
+		{"doc", BZIP2, 2},
+		{"file", BZIP2, 2},
+		{"doc", BROTLI, 2},
+		{"file", BROTLI, 2},
+		{"doc", LZ4, 2},
+		{"file", LZ4, 2},
 	}
 
 	for _, config := range testConfigs {
-		compTypeName := common.GetCompressionTypeName(config.compressType)
+		compTypeName := GetCompressionTypeName(config.compressType)
 		t.Run(fmt.Sprintf("Repack_%s_%s_%d", config.mode, compTypeName, config.workers), func(t *testing.T) {
 			outputFile := filepath.Join(outputRoot, fmt.Sprintf("repack_%s_%s_%d.bin", config.mode, compTypeName, config.workers))
 
-			opt := binfile.RepackCmd{
+			opt := RepackCmd{
 				Source:              testFile,
 				Target:              outputFile,
 				Workers:             config.workers,
@@ -59,7 +56,7 @@ func TestRepackFunctionality(t *testing.T) {
 				Limit:               0,
 			}
 
-			err := binfile.Repack(opt)
+			err := Repack(opt)
 			if err != nil {
 				t.Fatalf("Repack failed: %v", err)
 			}
@@ -75,14 +72,14 @@ func TestRepackFunctionality(t *testing.T) {
 			}
 
 			// 验证可以读取repack后的文件
-			br, err := binfile.NewBinReader(outputFile, config.compressType)
+			br, err := NewBinReader(outputFile, config.compressType)
 			if err != nil {
 				t.Fatalf("Read repacked file failed: %v", err)
 			}
 			defer br.Close()
 
 			// 搜索第一个文档
-			pos := br.Search(binfile.SearchOption{Key: "^test-key-0$", Skip: 1, Offset: 0})
+			pos := br.Search(SearchOption{Key: "^test-key-0$", Skip: 1, Offset: 0})
 			if pos < 0 {
 				t.Fatalf("Document not found: test-key-0, pos: %d", pos)
 			}
@@ -101,22 +98,22 @@ func TestRepackFunctionality(t *testing.T) {
 
 // TestLargeFileHandling 测试大文件处理
 func TestLargeFileHandling(t *testing.T) {
-	binfile.RedirectToDevNull()
-	outputRoot := common.GetTestDir("large_file_test")
-	os.MkdirAll(outputRoot, 0755)
-	defer common.CleanupTestDir(outputRoot)
+	RedirectToDevNull()
+	outputRoot := GetTestDir("large_file_test")
+	_ = os.MkdirAll(outputRoot, 0755)
+	defer CleanupTestDir(outputRoot)
 
 	// 创建较大的测试文件
-	testDocs := common.CreateTestDocs(1000)
+	testDocs := CreateTestDocs(1000)
 	testFile := filepath.Join(outputRoot, "large_test.bin")
 
-	err := common.WriteTestFile(testFile, testDocs, binfile.NONE)
+	err := WriteTestFile(testFile, testDocs, NONE)
 	if err != nil {
 		t.Fatalf("Create large test file failed: %v", err)
 	}
 
 	// 测试读取大文件
-	reader, err := binfile.NewBinReader(testFile, binfile.NONE)
+	reader, err := NewBinReader(testFile, NONE)
 	if err != nil {
 		t.Fatalf("NewBinReader failed: %v", err)
 	}
@@ -125,11 +122,11 @@ func TestLargeFileHandling(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Get file stat failed: %v", err)
 	}
-	binfile.LogInfo("file size: %d\n", stat.Size())
+	LogInfo("file size: %d\n", stat.Size())
 	// 测试计数功能
-	binfile.Verbose = true
-	binfile.SetGlobalLogLevel(binfile.DEBUG)
-	count := reader.Count(&binfile.CountOption{
+	Verbose = true
+	SetGlobalLogLevel(DEBUG)
+	count := reader.Count(&CountOption{
 		Offset:      0,
 		End:         -1,
 		WorkerCount: 1,
@@ -137,14 +134,14 @@ func TestLargeFileHandling(t *testing.T) {
 		VerboseStep: 1,
 		SkipError:   true,
 	})
-	binfile.Verbose = false
-	binfile.SetGlobalLogLevel(binfile.INFO)
+	Verbose = false
+	SetGlobalLogLevel(INFO)
 	if count != int64(len(testDocs)) {
 		t.Errorf("Expected count %d, got %d", len(testDocs), count)
 	}
 
 	// 测试搜索功能
-	pos := reader.Search(binfile.SearchOption{
+	pos := reader.Search(SearchOption{
 		Key:    "^test-key-500$",
 		Skip:   1,
 		Offset: 0,
@@ -166,16 +163,16 @@ func TestLargeFileHandling(t *testing.T) {
 
 // TestConcurrentAccess 测试并发访问
 func TestConcurrentAccess(t *testing.T) {
-	binfile.RedirectToDevNull()
-	outputRoot := common.GetTestDir("concurrent_test")
-	os.MkdirAll(outputRoot, 0755)
-	defer common.CleanupTestDir(outputRoot)
+	RedirectToDevNull()
+	outputRoot := GetTestDir("concurrent_test")
+	_ = os.MkdirAll(outputRoot, 0755)
+	defer CleanupTestDir(outputRoot)
 
 	// 创建测试文件
-	testDocs := common.CreateTestDocs(100)
+	testDocs := CreateTestDocs(100)
 	testFile := filepath.Join(outputRoot, "concurrent_test.bin")
 
-	err := common.WriteTestFile(testFile, testDocs, binfile.NONE)
+	err := WriteTestFile(testFile, testDocs, NONE)
 	if err != nil {
 		t.Fatalf("Create test file failed: %v", err)
 	}
@@ -189,7 +186,7 @@ func TestConcurrentAccess(t *testing.T) {
 		go func(id int) {
 			defer func() { done <- true }()
 
-			reader, err := binfile.NewBinReader(testFile, binfile.NONE)
+			reader, err := NewBinReader(testFile, NONE)
 			if err != nil {
 				t.Errorf("Goroutine %d: NewBinReader failed: %v", id, err)
 				return
@@ -199,7 +196,7 @@ func TestConcurrentAccess(t *testing.T) {
 			for j := 0; j < iterations; j++ {
 				// 随机搜索一个文档
 				keyPattern := fmt.Sprintf("^test-key-%d$", j%len(testDocs))
-				pos := reader.Search(binfile.SearchOption{
+				pos := reader.Search(SearchOption{
 					Key:    keyPattern,
 					Skip:   1,
 					Offset: 0,
@@ -233,21 +230,21 @@ func TestConcurrentAccess(t *testing.T) {
 
 // TestErrorRecovery 测试错误恢复
 func TestErrorRecovery(t *testing.T) {
-	binfile.RedirectToDevNull()
-	outputRoot := common.GetTestDir("error_recovery_test")
-	os.MkdirAll(outputRoot, 0755)
-	defer common.CleanupTestDir(outputRoot)
+	RedirectToDevNull()
+	outputRoot := GetTestDir("error_recovery_test")
+	_ = os.MkdirAll(outputRoot, 0755)
+	defer CleanupTestDir(outputRoot)
 
 	// 创建测试文件
-	testDocs := common.CreateTestDocs(50)
+	testDocs := CreateTestDocs(50)
 	testFile := filepath.Join(outputRoot, "error_test.bin")
 
-	err := common.WriteTestFile(testFile, testDocs, binfile.NONE)
+	err := WriteTestFile(testFile, testDocs, NONE)
 	if err != nil {
 		t.Fatalf("Create test file failed: %v", err)
 	}
 
-	reader, err := binfile.NewBinReader(testFile, binfile.NONE)
+	reader, err := NewBinReader(testFile, NONE)
 	if err != nil {
 		t.Fatalf("NewBinReader failed: %v", err)
 	}
@@ -266,7 +263,7 @@ func TestErrorRecovery(t *testing.T) {
 	}
 
 	// 测试搜索不存在的键
-	pos := reader.Search(binfile.SearchOption{
+	pos := reader.Search(SearchOption{
 		Key:    "^nonexistent-key$",
 		Skip:   1,
 		Offset: 0,
@@ -279,33 +276,33 @@ func TestErrorRecovery(t *testing.T) {
 
 // TestCompressionTypes 测试所有压缩类型的功能
 func TestCompressionTypes(t *testing.T) {
-	binfile.RedirectToDevNull()
-	outputRoot := common.GetTestDir("compression_types_test")
-	os.MkdirAll(outputRoot, 0755)
-	defer common.CleanupTestDir(outputRoot)
+	RedirectToDevNull()
+	outputRoot := GetTestDir("compression_types_test")
+	_ = os.MkdirAll(outputRoot, 0755)
+	defer CleanupTestDir(outputRoot)
 
-	testDocs := []*binfile.Doc{
+	testDocs := []*Doc{
 		{Key: []byte("small"), Content: []byte("Hello World")},
-		{Key: []byte("medium"), Content: []byte(common.RandStringBytesMaskImprSrc(1024))},
-		{Key: []byte("large"), Content: []byte(common.RandStringBytesMaskImprSrc(8192))},
+		{Key: []byte("medium"), Content: []byte(RandStringBytesMaskImprSrc(1024))},
+		{Key: []byte("large"), Content: []byte(RandStringBytesMaskImprSrc(8192))},
 		{Key: []byte("binary"), Content: []byte{0x00, 0x01, 0xFF, 0xFE, 0x7F, 0x80}},
 	}
 
-	compressTypes := common.GetAllCompressionTypes()
+	compressTypes := GetAllCompressionTypes()
 
 	for _, compressType := range compressTypes {
-		compTypeName := common.GetCompressionTypeName(compressType)
+		compTypeName := GetCompressionTypeName(compressType)
 		t.Run(compTypeName, func(t *testing.T) {
 			testFile := filepath.Join(outputRoot, fmt.Sprintf("test_%s.bin", compTypeName))
 
 			// 写入文档
-			err := common.WriteTestFile(testFile, testDocs, compressType)
+			err := WriteTestFile(testFile, testDocs, compressType)
 			if err != nil {
 				t.Fatalf("Write test file failed: %v", err)
 			}
 
 			// 读取并验证
-			reader, err := binfile.NewBinReader(testFile, compressType)
+			reader, err := NewBinReader(testFile, compressType)
 			if err != nil {
 				t.Fatalf("NewBinReader failed: %v", err)
 			}
@@ -313,7 +310,7 @@ func TestCompressionTypes(t *testing.T) {
 
 			// 验证所有文档都可以正确读取
 			for i, expectedDoc := range testDocs {
-				pos := reader.Search(binfile.SearchOption{
+				pos := reader.Search(SearchOption{
 					Key:    fmt.Sprintf("^%s$", string(expectedDoc.Key)),
 					Skip:   1,
 					Offset: 0,
