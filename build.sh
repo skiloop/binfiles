@@ -18,9 +18,9 @@ echo "TARGET_OS       : ${TARGET_OS}"
 # STEP 2: Build the ldflags
 
 LDFLAGS=(
-  "-X '${PACKAGE}/version.Version=${VERSION}'"
-  "-X '${PACKAGE}/version.CommitHash=${COMMIT_HASH}'"
-  "-X '${PACKAGE}/version.BuildTime=${BUILD_TIMESTAMP}'"
+  "-X '${PACKAGE}/binfile.Version=${VERSION}'"
+  "-X '${PACKAGE}/binfile.CommitHash=${COMMIT_HASH}'"
+  "-X '${PACKAGE}/binfile.BuildTime=${BUILD_TIMESTAMP}'"
 )
 
 # STEP 3: Actual Go build process

@@ -18,9 +18,9 @@ echo "TARGET OS       : $os"
 # STEP 2: Build the ldflags
 
 $env:LDFLAGS=@(
-  "-X '$env:PACKAGE/version.Version=$env:VERSION'"
-  "-X '$env:PACKAGE/version.CommitHash=$env:COMMIT_HASH'"
-  "-X '$env:PACKAGE/version.BuildTime=$env:BUILD_TIMESTAMP'"
+  "-X '$env:PACKAGE/binfile.Version=$env:VERSION'"
+  "-X '$env:PACKAGE/binfile.CommitHash=$env:COMMIT_HASH'"
+  "-X '$env:PACKAGE/binfile.BuildTime=$env:BUILD_TIMESTAMP'"
   )
 
 

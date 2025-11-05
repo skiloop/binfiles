@@ -10,7 +10,6 @@ import (
 	"github.com/alecthomas/kong"
 
 	"github.com/skiloop/binfiles/binfile"
-	"github.com/skiloop/binfiles/version"
 )
 
 type ListCmd struct {
@@ -295,6 +294,6 @@ func main() {
 	case "list-tar <input>":
 		binfile.ListTar(client.ListTar.Input, binfile.CompressionFormat(client.ListTar.Format), int(client.ListTar.Limit))
 	default:
-		binfile.LogInfo("%s\n", version.BuildVersion())
+		binfile.LogInfo("%s\n", binfile.BuildVersion())
 	}
 }
