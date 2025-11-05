@@ -5,8 +5,6 @@ import (
 	"math"
 	"os"
 	"sync/atomic"
-
-	"github.com/skiloop/binfiles/workers"
 )
 
 type docRepack struct {
@@ -162,7 +160,7 @@ func (r *docRepack) start(workerCount int, optimized bool) (err error) {
 	r.stopCh = make(chan interface{}, 1) // 增加容量避免阻塞
 	// start run
 	go r.merge(optimized)
-	workers.RunJobs(workerCount, nil, r.worker, nil)
+	RunJobs(workerCount, nil, r.worker, nil)
 	// tell merger to finish
 	r.docCh <- nil
 	<-r.stopCh

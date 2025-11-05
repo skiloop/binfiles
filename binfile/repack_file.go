@@ -6,8 +6,6 @@ import (
 	"io"
 	"os"
 	"sync/atomic"
-
-	"github.com/skiloop/binfiles/workers"
 )
 
 type fileRepack struct {
@@ -194,7 +192,7 @@ func (r *fileRepack) start(source string, workerCount int, optimized bool) error
 	waitMergerCh := make(chan interface{})
 	go r.merge(waitMergerCh)
 
-	workers.RunJobs(workerCount, r.stopSeeder, func(no int) {
+	RunJobs(workerCount, r.stopSeeder, func(no int) {
 		r.worker(no, optimized)
 	}, r.seeder)
 

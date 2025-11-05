@@ -10,8 +10,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-
-	"github.com/skiloop/binfiles/workers"
 )
 
 type PackageOption struct {
@@ -55,7 +53,7 @@ func Package(option *PackageOption, bw BinWriter) (err error) {
 
 func packageTar(option *PackageOption, bw BinWriter, ch, stop chan any, pattern *regexp.Regexp) (err error) {
 	LogDebug("package tar file\n")
-	workers.RunJobs(option.WorkerCount, stop, func(no int) {
+	RunJobs(option.WorkerCount, stop, func(no int) {
 		packageWorker(ch, no, bw)
 	}, func() {
 		tarSeeder(option, ch, stop, pattern)
@@ -105,7 +103,7 @@ func tarSeeder(option *PackageOption, ch, stop chan any, pattern *regexp.Regexp)
 }
 
 func packageDirectory(option *PackageOption, bw BinWriter, ch, stop chan any, pattern *regexp.Regexp) (err error) {
-	workers.RunJobs(option.WorkerCount, stop, func(no int) {
+	RunJobs(option.WorkerCount, stop, func(no int) {
 		packageWorker(ch, no, bw)
 	}, func() {
 		searchFiles(option.Path, ch, stop, option.InputCompress, pattern)

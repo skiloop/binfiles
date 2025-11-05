@@ -5,8 +5,6 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
-
-	"github.com/skiloop/binfiles/workers"
 )
 
 type pathRepack struct {
@@ -111,5 +109,5 @@ func getPackageSuffix(pt int) string {
 }
 
 func (p *pathRepack) start(wc int) {
-	workers.RunJobs(wc, p.stopCh, p.worker, p.seeder)
+	RunJobs(wc, p.stopCh, p.worker, p.seeder)
 }
