@@ -9,7 +9,7 @@
 
 ## 1. Add file buffer
 
-- [ ] add buffer to writer
+- [x] add buffer to writer
 - [ ] add add buffer reader 
 - [ ] check where is buffer reader needed
 - [ ] apply buffer reader
