@@ -106,7 +106,7 @@ func newWriter(filename string, compress string) binfile.BinWriter {
 		binfile.LogError("unknown compression type %s\n", client.CompressType)
 		return nil
 	}
-	return binfile.NewBinWriter(filename, ct)
+	return binfile.NewBufBinWriter(filename, ct, 64*1024)
 }
 
 func listDocs(br binfile.BinReader) {

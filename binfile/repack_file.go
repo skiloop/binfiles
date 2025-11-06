@@ -25,10 +25,11 @@ type fileRepack struct {
 func (r *fileRepack) nextBinWriter(optimized bool) BinWriter {
 	no := r.idx.Add(1)
 	filename := fmt.Sprintf("%s.%d", r.target, no)
-	writer := NewBinWriter(filename, r.tt)
 	if optimized {
-		return writer
+		return NewBufBinWriter(filename, r.tt, 64*1024)
 	}
+	writer := NewBinWriter(filename, r.tt)
+
 	return &oldBinWriter{
 		binWriter:     writer.(*binWriter),
 		oldCompressor: oldCompressor{},
